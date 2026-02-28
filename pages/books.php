@@ -1,68 +1,66 @@
 <?php
-// uniform.php - Uniforms List with Add & Edit Modal, Sold, Pagination, History & Total Amount
+// books.php - Books List with Add & Edit Modal, Sold, Pagination, History & Total Amount
 require_once '../connection/dbconnection.php';
 $conn = $GLOBALS['conn'];
 
-$current_page = 'uniforms';
+$current_page = 'books';
 
 $message = '';
 
 // Handle Sold Action
 if (isset($_GET['action']) && $_GET['action'] === 'sold' && isset($_GET['id'])) {
     $id = (int)$_GET['id'];
-    $get = mysqli_fetch_assoc(mysqli_query($conn, "SELECT price, quantity FROM uniform WHERE uniform_id = $id"));
+    $get = mysqli_fetch_assoc(mysqli_query($conn, "SELECT price, quantity FROM books WHERE book_id = $id"));
     if ($get && $get['quantity'] > 0) {
         $price_at_sale = $get['price'];
-        mysqli_query($conn, "UPDATE uniform SET quantity = quantity - 1 WHERE uniform_id = $id");
-        mysqli_query($conn, "INSERT INTO uniform_sales_history (uniform_id, quantity_sold, price_at_sale) 
+        mysqli_query($conn, "UPDATE books SET quantity = quantity - 1 WHERE book_id = $id");
+        mysqli_query($conn, "INSERT INTO book_sales_history (book_id, quantity_sold, price_at_sale) 
                              VALUES ($id, 1, $price_at_sale)");
     }
-    header("Location: uniform.php?msg=sold");
+    header("Location: books.php?msg=sold");
     exit;
 }
 
-// Handle Add Uniform (via modal POST)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_uniform') {
-    $uniform_name      = mysqli_real_escape_string($conn, trim($_POST['uniform_name'] ?? ''));
-    $category          = $_POST['category'] ?? '';
-    $size              = mysqli_real_escape_string($conn, trim($_POST['size'] ?? ''));
-    $color             = mysqli_real_escape_string($conn, trim($_POST['color'] ?? ''));
+// Handle Add Book (via modal POST)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_book') {
+    $book_name         = mysqli_real_escape_string($conn, trim($_POST['book_name'] ?? ''));
+    $grade_level       = $_POST['grade_level'] ?? '';
+    $subject           = mysqli_real_escape_string($conn, trim($_POST['subject'] ?? ''));
     $price             = floatval($_POST['price'] ?? 0);
     $quantity          = (int)($_POST['quantity'] ?? 0);
     $low_stock_limit   = (int)($_POST['low_stock_limit'] ?? 10);
     $supplier_id       = !empty($_POST['supplier_id']) ? (int)$_POST['supplier_id'] : NULL;
 
-    if (empty($uniform_name) || empty($category) || empty($size) || empty($color) || $price <= 0 || $quantity < 0) {
+    if (empty($book_name) || empty($grade_level) || empty($subject) || $price <= 0 || $quantity < 0) {
         $message = '<div style="background:#ffebee; color:#c62828; padding:14px 20px; border-radius:12px; margin-bottom:24px;">
                         <strong>Error:</strong> Please fill all required fields correctly.
                     </div>';
     } else {
         $supplier_sql = $supplier_id ? $supplier_id : 'NULL';
-        $query = "INSERT INTO uniform 
-                  (uniform_name, category, size, color, price, quantity, low_stock_limit, supplier_id, date_added)
+        $query = "INSERT INTO books 
+                  (book_name, grade_level, subject, price, quantity, low_stock_limit, supplier_id, date_added)
                   VALUES 
-                  ('$uniform_name', '$category', '$size', '$color', $price, $quantity, $low_stock_limit, $supplier_sql, NOW())";
+                  ('$book_name', '$grade_level', '$subject', $price, $quantity, $low_stock_limit, $supplier_sql, NOW())";
 
         if (mysqli_query($conn, $query)) {
             $message = '<div style="background:#e2f0e6; color:#1a4d2e; padding:14px 20px; border-radius:12px; margin-bottom:24px; display:flex; align-items:center; gap:10px;">
                             <i class="fas fa-check-circle" style="font-size:20px;"></i>
-                            Uniform added successfully!
+                            Book added successfully!
                         </div>';
         } else {
             $message = '<div style="background:#ffebee; color:#c62828; padding:14px 20px; border-radius:12px; margin-bottom:24px;">
-                            <strong>Error adding uniform:</strong> ' . mysqli_error($conn) . '
+                            <strong>Error adding book:</strong> ' . mysqli_error($conn) . '
                         </div>';
         }
     }
 }
 
 // Handle Edit via POST
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_uniform') {
-    $id                = (int)$_POST['uniform_id'];
-    $uniform_name      = mysqli_real_escape_string($conn, trim($_POST['uniform_name']));
-    $category          = $_POST['category'];
-    $size              = mysqli_real_escape_string($conn, trim($_POST['size']));
-    $color             = mysqli_real_escape_string($conn, trim($_POST['color']));
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_book') {
+    $id                = (int)$_POST['book_id'];
+    $book_name         = mysqli_real_escape_string($conn, trim($_POST['book_name']));
+    $grade_level       = $_POST['grade_level'];
+    $subject           = mysqli_real_escape_string($conn, trim($_POST['subject']));
     $price             = floatval($_POST['price']);
     $quantity          = (int)$_POST['quantity'];
     $low_stock_limit   = (int)$_POST['low_stock_limit'];
@@ -70,26 +68,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     $supplier_sql = $supplier_id ? $supplier_id : 'NULL';
 
-    $query = "UPDATE uniform SET 
-                uniform_name      = '$uniform_name',
-                category          = '$category',
-                size              = '$size',
-                color             = '$color',
+    $query = "UPDATE books SET 
+                book_name         = '$book_name',
+                grade_level       = '$grade_level',
+                subject           = '$subject',
                 price             = $price,
                 quantity          = $quantity,
                 low_stock_limit   = $low_stock_limit,
                 supplier_id       = $supplier_sql,
                 updated_at        = NOW()
-              WHERE uniform_id = $id";
+              WHERE book_id = $id";
 
     if (mysqli_query($conn, $query)) {
         $message = '<div style="background:#e2f0e6; color:#1a4d2e; padding:14px 20px; border-radius:12px; margin-bottom:24px; display:flex; align-items:center; gap:10px;">
                         <i class="fas fa-check-circle" style="font-size:20px;"></i>
-                        Uniform updated successfully!
+                        Book updated successfully!
                     </div>';
     } else {
         $message = '<div style="background:#ffebee; color:#c62828; padding:14px 20px; border-radius:12px; margin-bottom:24px;">
-                        <strong>Error updating:</strong> ' . mysqli_error($conn) . '
+                        <strong>Error updating book:</strong> ' . mysqli_error($conn) . '
                     </div>';
     }
 }
@@ -98,37 +95,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $limit = 5;
 $offset = ($page - 1) * $limit;
-$total_query = "SELECT COUNT(*) as total FROM uniform";
+$total_query = "SELECT COUNT(*) as total FROM books";
 $total = mysqli_fetch_assoc(mysqli_query($conn, $total_query))['total'] ?? 0;
 $pages = ceil($total / $limit);
 
-// Fetch uniforms with pagination
-$query = "SELECT u.*, s.supplier_name 
-          FROM uniform u 
-          LEFT JOIN suppliers s ON u.supplier_id = s.id 
-          ORDER BY u.uniform_name ASC 
+// Fetch books with pagination
+$query = "SELECT b.*, s.supplier_name 
+          FROM books b 
+          LEFT JOIN suppliers s ON b.supplier_id = s.id 
+          ORDER BY b.book_name ASC 
           LIMIT $offset, $limit";
-$uniforms = mysqli_fetch_all(mysqli_query($conn, $query), MYSQLI_ASSOC);
+$books = mysqli_fetch_all(mysqli_query($conn, $query), MYSQLI_ASSOC);
 
-// Fetch suppliers for add & edit modal (only uniform or both)
+// Fetch suppliers for add & edit modal (books only or both)
 $suppliers = mysqli_fetch_all(mysqli_query($conn, "
     SELECT id, supplier_name 
     FROM suppliers 
     WHERE status = 'active' 
-      AND supplier_type IN ('uniforms', 'both') 
+      AND supplier_type IN ('books', 'both') 
     ORDER BY supplier_name ASC
 "), MYSQLI_ASSOC);
 
 // Fetch sales history (latest 20)
 $history = mysqli_fetch_all(mysqli_query($conn, "
-    SELECT h.*, u.uniform_name 
-    FROM uniform_sales_history h 
-    JOIN uniform u ON h.uniform_id = u.uniform_id 
+    SELECT h.*, b.book_name 
+    FROM book_sales_history h 
+    JOIN books b ON h.book_id = b.book_id 
     ORDER BY h.sold_at DESC LIMIT 20
 "), MYSQLI_ASSOC);
 
 // Total amount sold (quantity × price_at_sale)
-$total_amount_query = "SELECT SUM(quantity_sold * price_at_sale) as total_amount FROM uniform_sales_history";
+$total_amount_query = "SELECT SUM(quantity_sold * price_at_sale) as total_amount FROM book_sales_history";
 $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['total_amount'] ?? 0;
 ?>
 
@@ -137,10 +134,11 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['to
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>La Trinidad Academy · Uniforms</title>
+    <title>La Trinidad Academy · Books</title>
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.4/css/all.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600&display=swap" rel="stylesheet">
 
+    <!-- Same CSS as uniform.php -->
     <style>
         body { background:#f0f7f2; font-family:'Inter',sans-serif; color:#1e3c2c; margin:0; }
         .main-content { padding:24px 32px; }
@@ -184,9 +182,9 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['to
 <div class="main-content">
     <div class="dashboard">
         <div class="header">
-            <h1><i class="fas fa-tshirt"></i> Uniform Management</h1>
+            <h1><i class="fas fa-book"></i> Books Management</h1>
             <button class="btn-primary" onclick="document.getElementById('addModal').classList.add('active')">
-                <i class="fas fa-plus"></i> Add Uniform
+                <i class="fas fa-plus"></i> Add Book
             </button>
         </div>
 
@@ -195,21 +193,19 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['to
         <!-- Filter -->
         <div class="filter-bar">
             <a href="?filter=all" class="filter-btn <?= $filter==='all'?'active':'' ?>">All</a>
-            <a href="?filter=boys" class="filter-btn <?= $filter==='boys'?'active':'' ?>">Boys</a>
-            <a href="?filter=girls" class="filter-btn <?= $filter==='girls'?'active':'' ?>">Girls</a>
-            <a href="?filter=pe" class="filter-btn <?= $filter==='pe'?'active':'' ?>">PE Uniform</a>
+            <a href="?filter=elementary" class="filter-btn <?= $filter==='elementary'?'active':'' ?>">Elementary</a>
+            <a href="?filter=highschool" class="filter-btn <?= $filter==='highschool'?'active':'' ?>">High School</a>
             <a href="?filter=others" class="filter-btn <?= $filter==='others'?'active':'' ?>">Others</a>
         </div>
 
-        <!-- Uniforms Table -->
+        <!-- Books Table -->
         <div class="table-container">
             <table>
                 <thead>
                     <tr>
-                        <th>Name</th>
-                        <th>Category</th>
-                        <th>Size</th>
-                        <th>Color</th>
+                        <th>Book Name</th>
+                        <th>Grade Level</th>
+                        <th>Subject</th>
                         <th>Price</th>
                         <th>Quantity</th>
                         <th>Supplier</th>
@@ -217,33 +213,31 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['to
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (empty($uniforms)): ?>
-                        <tr><td colspan="8" style="text-align:center; padding:60px;">No uniforms yet.</td></tr>
+                    <?php if (empty($books)): ?>
+                        <tr><td colspan="7" style="text-align:center; padding:60px;">No books yet.</td></tr>
                     <?php else: ?>
-                        <?php foreach ($uniforms as $u): ?>
+                        <?php foreach ($books as $b): ?>
                             <tr>
-                                <td><?= htmlspecialchars($u['uniform_name']) ?></td>
-                                <td><?= htmlspecialchars($u['category']) ?></td>
-                                <td><?= htmlspecialchars($u['size']) ?></td>
-                                <td><?= htmlspecialchars($u['color']) ?></td>
-                                <td>₱<?= number_format($u['price'], 2) ?></td>
-                                <td><?= number_format($u['quantity']) ?> pcs</td>
-                                <td><?= htmlspecialchars($u['supplier_name'] ?? '—') ?></td>
+                                <td><?= htmlspecialchars($b['book_name']) ?></td>
+                                <td><?= htmlspecialchars($b['grade_level']) ?></td>
+                                <td><?= htmlspecialchars($b['subject']) ?></td>
+                                <td>₱<?= number_format($b['price'], 2) ?></td>
+                                <td><?= number_format($b['quantity']) ?> pcs</td>
+                                <td><?= htmlspecialchars($b['supplier_name'] ?? '—') ?></td>
                                 <td class="action-buttons">
                                     <button class="edit-btn" onclick="openEditModal(
-                                        <?= $u['uniform_id'] ?>,
-                                        '<?= addslashes($u['uniform_name']) ?>',
-                                        '<?= $u['category'] ?>',
-                                        '<?= addslashes($u['size']) ?>',
-                                        '<?= addslashes($u['color']) ?>',
-                                        <?= $u['price'] ?>,
-                                        <?= $u['quantity'] ?>,
-                                        <?= $u['low_stock_limit'] ?>,
-                                        <?= $u['supplier_id'] ?? 'null' ?>
+                                        <?= $b['book_id'] ?>,
+                                        '<?= addslashes($b['book_name']) ?>',
+                                        '<?= $b['grade_level'] ?>',
+                                        '<?= addslashes($b['subject']) ?>',
+                                        <?= $b['price'] ?>,
+                                        <?= $b['quantity'] ?>,
+                                        <?= $b['low_stock_limit'] ?>,
+                                        <?= $b['supplier_id'] ?? 'null' ?>
                                     )">
                                         <i class="fas fa-edit"></i> Edit
                                     </button>
-                                    <button class="sold-btn" onclick="if(confirm('Sold 1 piece?')) location.href='?action=sold&id=<?= $u['uniform_id'] ?>'">
+                                    <button class="sold-btn" onclick="if(confirm('Sold 1 book?')) location.href='?action=sold&id=<?= $b['book_id'] ?>'">
                                         Sold
                                     </button>
                                 </td>
@@ -271,19 +265,19 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['to
 
         <!-- Total Amount Sold -->
         <div class="total-amount">
-            Total Amount from Sales: <span style="color:#2e7d5e;">₱<?= number_format($total_amount, 2) ?></span>
+            Total Amount from Book Sales: <span style="color:#2e7d5e;">₱<?= number_format($total_amount, 2) ?></span>
         </div>
 
         <!-- Sales History -->
         <div class="history-section">
-            <h3 style="margin-bottom:16px; color:#1a4d2e;">Recent Sales History</h3>
+            <h3 style="margin-bottom:16px; color:#1a4d2e;">Recent Book Sales History</h3>
             <?php if (empty($history)): ?>
                 <p style="color:#4a6b57;">No sales recorded yet.</p>
             <?php else: ?>
                 <ul style="list-style:none; padding:0;">
                     <?php foreach ($history as $h): ?>
                         <li style="padding:12px 0; border-bottom:1px solid #e2f0e6;">
-                            <strong><?= htmlspecialchars($h['uniform_name']) ?></strong> —
+                            <strong><?= htmlspecialchars($h['book_name']) ?></strong> —
                             <span style="color:#d32f2f;">Sold <?= $h['quantity_sold'] ?> pcs</span>
                             (₱<?= number_format($h['price_at_sale'] * $h['quantity_sold'], 2) ?>) on 
                             <?= date('M d, Y g:i A', strtotime($h['sold_at'])) ?>
@@ -295,71 +289,67 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['to
     </div>
 </div>
 
-<!-- Add Uniform Modal -->
+<!-- Add Book Modal -->
 <div class="modal-overlay" id="addModal">
     <div class="modal-container">
         <div class="modal-header">
-            <h2><i class="fas fa-plus-circle"></i> Add New Uniform</h2>
+            <h2><i class="fas fa-plus-circle"></i> Add New Book</h2>
             <button onclick="document.getElementById('addModal').classList.remove('active')" style="background:none;border:none;font-size:28px;cursor:pointer;color:#4a6b57;">×</button>
         </div>
         <div class="modal-body">
             <form method="POST">
-                <input type="hidden" name="action" value="add_uniform">
+                <input type="hidden" name="action" value="add_book">
 
                 <div class="form-group">
-                    <label>Uniform Name</label>
-                    <input type="text" name="uniform_name" class="form-control" required>
+                    <label>Book Name</label>
+                    <input type="text" name="book_name" class="form-control" required>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Category</label>
-                        <select name="category" class="form-control" required>
-                            <option value="Male">Boys</option>
-                            <option value="Female">Girls</option>
+                        <label>Grade Level</label>
+                        <select name="grade_level" class="form-control" required>
+                            <option value="Elementary">Elementary</option>
+                            <option value="High School">High School</option>
+                            <option value="Others">Others</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Size</label>
-                        <input type="text" name="size" class="form-control" required>
+                        <label>Subject</label>
+                        <input type="text" name="subject" class="form-control" required>
                     </div>
                 </div>
 
                 <div class="form-row">
-                    <div class="form-group">
-                        <label>Color</label>
-                        <input type="text" name="color" class="form-control" required>
-                    </div>
                     <div class="form-group">
                         <label>Price (₱)</label>
                         <input type="number" name="price" step="0.01" min="0" class="form-control" required>
                     </div>
-                </div>
-
-                <div class="form-row">
                     <div class="form-group">
                         <label>Quantity</label>
                         <input type="number" name="quantity" min="0" class="form-control" required>
                     </div>
+                </div>
+
+                <div class="form-row">
                     <div class="form-group">
                         <label>Low Stock Limit</label>
                         <input type="number" name="low_stock_limit" min="1" value="10" class="form-control">
                     </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Supplier</label>
-                    <select name="supplier_id" class="form-control">
-                        <option value="">No Supplier</option>
-                        <?php foreach ($suppliers as $s): ?>
-                            <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['supplier_name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <div class="form-group">
+                        <label>Supplier</label>
+                        <select name="supplier_id" class="form-control">
+                            <option value="">No Supplier</option>
+                            <?php foreach ($suppliers as $s): ?>
+                                <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['supplier_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="form-actions">
                     <button type="button" onclick="document.getElementById('addModal').classList.remove('active')" class="btn-secondary">Cancel</button>
-                    <button type="submit" class="btn-primary">Add Uniform</button>
+                    <button type="submit" class="btn-primary">Add Book</button>
                 </div>
             </form>
         </div>
@@ -370,63 +360,59 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['to
 <div class="modal-overlay" id="editModal">
     <div class="modal-container">
         <div class="modal-header">
-            <h2><i class="fas fa-edit"></i> Edit Uniform</h2>
+            <h2><i class="fas fa-edit"></i> Edit Book</h2>
             <button onclick="document.getElementById('editModal').classList.remove('active')" style="background:none;border:none;font-size:28px;cursor:pointer;color:#4a6b57;">×</button>
         </div>
         <div class="modal-body">
             <form method="POST">
-                <input type="hidden" name="action" value="edit_uniform">
-                <input type="hidden" name="uniform_id" id="edit_uniform_id">
+                <input type="hidden" name="action" value="edit_book">
+                <input type="hidden" name="book_id" id="edit_book_id">
 
                 <div class="form-group">
-                    <label>Uniform Name</label>
-                    <input type="text" name="uniform_name" id="edit_uniform_name" class="form-control" required>
+                    <label>Book Name</label>
+                    <input type="text" name="book_name" id="edit_book_name" class="form-control" required>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Category</label>
-                        <select name="category" id="edit_category" class="form-control" required>
-                            <option value="Male">Boys</option>
-                            <option value="Female">Girls</option>
+                        <label>Grade Level</label>
+                        <select name="grade_level" id="edit_grade_level" class="form-control" required>
+                            <option value="Elementary">Elementary</option>
+                            <option value="High School">High School</option>
+                            <option value="Others">Others</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Size</label>
-                        <input type="text" name="size" id="edit_size" class="form-control" required>
+                        <label>Subject</label>
+                        <input type="text" name="subject" id="edit_subject" class="form-control" required>
                     </div>
                 </div>
 
                 <div class="form-row">
-                    <div class="form-group">
-                        <label>Color</label>
-                        <input type="text" name="color" id="edit_color" class="form-control" required>
-                    </div>
                     <div class="form-group">
                         <label>Price (₱)</label>
                         <input type="number" name="price" id="edit_price" step="0.01" min="0" class="form-control" required>
                     </div>
-                </div>
-
-                <div class="form-row">
                     <div class="form-group">
                         <label>Quantity</label>
                         <input type="number" name="quantity" id="edit_quantity" min="0" class="form-control" required>
                     </div>
+                </div>
+
+                <div class="form-row">
                     <div class="form-group">
                         <label>Low Stock Limit</label>
                         <input type="number" name="low_stock_limit" id="edit_low_stock_limit" min="1" class="form-control">
                     </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Supplier</label>
-                    <select name="supplier_id" id="edit_supplier_id" class="form-control">
-                        <option value="">No Supplier</option>
-                        <?php foreach ($suppliers as $s): ?>
-                            <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['supplier_name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <div class="form-group">
+                        <label>Supplier</label>
+                        <select name="supplier_id" id="edit_supplier_id" class="form-control">
+                            <option value="">No Supplier</option>
+                            <?php foreach ($suppliers as $s): ?>
+                                <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['supplier_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="form-actions">
@@ -439,12 +425,11 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['to
 </div>
 
 <script>
-function openEditModal(id, name, cat, size, color, price, qty, limit, sup) {
-    document.getElementById('edit_uniform_id').value = id;
-    document.getElementById('edit_uniform_name').value = name;
-    document.getElementById('edit_category').value = cat;
-    document.getElementById('edit_size').value = size;
-    document.getElementById('edit_color').value = color;
+function openEditModal(id, name, grade, subj, price, qty, limit, sup) {
+    document.getElementById('edit_book_id').value = id;
+    document.getElementById('edit_book_name').value = name;
+    document.getElementById('edit_grade_level').value = grade;
+    document.getElementById('edit_subject').value = subj;
     document.getElementById('edit_price').value = price;
     document.getElementById('edit_quantity').value = qty;
     document.getElementById('edit_low_stock_limit').value = limit;
