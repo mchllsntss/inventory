@@ -172,7 +172,6 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
         .btn-pill:hover { background: var(--green-dark); }
         .btn-outline { background: transparent; color: var(--green); border: 2px solid var(--green); }
         .btn-outline:hover { background: var(--green); color: white; }
-
         .top-controls {
             display: flex;
             align-items: center;
@@ -209,7 +208,6 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
             color: white;
             border-color: var(--green-dark);
         }
-
         .table-container {
             background: white;
             border-radius: 16px;
@@ -217,10 +215,10 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
             border: 1px solid #d4e8da;
             box-shadow: 0 6px 16px rgba(0,0,0,0.05);
         }
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            table-layout: fixed; 
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
         }
         th, td {
             padding: 14px 10px;
@@ -237,35 +235,23 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
         }
         tr:hover { background: #f8fdfa; }
 
-        /* Column widths - inayos para magkasya ang mas malalaking vertical buttons */
         th:nth-child(1), td:nth-child(1) { width: 22%; }
         th:nth-child(2), td:nth-child(2) { width: 11%; }
         th:nth-child(3), td:nth-child(3) { width: 18%; }
         th:nth-child(4), td:nth-child(4) { width: 10%; text-align: right; }
         th:nth-child(5), td:nth-child(5) { width: 10%; text-align: right; }
         th:nth-child(6), td:nth-child(6) { width: 12%; }
-        th:nth-child(7), td:nth-child(7) { 
-            width: 17%; 
-            min-width: 160px; 
-        }
+        th:nth-child(7), td:nth-child(7) { width: 17%; min-width: 160px; }
 
-        td {
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        td:nth-child(1), td:nth-child(3) {
-            white-space: normal;
-            word-break: break-word;
-        }
+        td { overflow: hidden; text-overflow: ellipsis; }
+        td:nth-child(1), td:nth-child(3) { white-space: normal; word-break: break-word; }
 
-      /* ─── VERTICAL ACTION BUTTONS ─── */
         .action-buttons {
             display: flex;
             flex-direction: row;
             gap: 8px;
             align-items: flex-start;
         }
-
         .action-btn {
             padding: 8px 4px;
             font-size: 13.5px;
@@ -277,36 +263,14 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
             gap: 6px;
             transition: all 0.15s;
             white-space: nowrap;
-            width: 100%;                /* full width inside cell */
-            justify-content: center;    /* center content */
+            width: 100%;
+            justify-content: center;
         }
-
         .action-btn i { font-size: 1.15em; }
         .action-btn.edit  { background: var(--blue);  color: white; }
         .action-btn.sold  { background: var(--red);   color: white; }
-
-        .action-btn:hover.edit { 
-            background: var(--blue-dark); 
-            transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(2, 136, 209, 0.3);
-        }
-        .action-btn:hover.sold { 
-            background: var(--red-dark);  
-            transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(211, 47, 47, 0.3);
-        }
-
-        /* Mobile adjustments */
-        @media (max-width: 768px) {
-            th:nth-child(7), td:nth-child(7) {
-                width: 22% !important;
-                min-width: 140px;
-            }
-            .action-btn {
-                padding: 9px 14px;
-                font-size: 13.5px;
-            }
-        }
+        .action-btn:hover.edit { background: var(--blue-dark); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(2,136,209,0.3); }
+        .action-btn:hover.sold { background: var(--red-dark);  transform: translateY(-2px); box-shadow: 0 4px 10px rgba(211,47,47,0.3); }
 
         .modal-overlay {
             display: none;
@@ -391,7 +355,6 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
             text-align: center;
             margin: 32px 0;
         }
-
         .alert {
             padding: 14px 20px;
             border-radius: 12px;
@@ -403,9 +366,15 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
         .alert.success { background: #e2f0e6; color: #1a4d2e; }
         .alert.error { background: #ffebee; color: #c62828; }
 
-        .history-controls { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+        .history-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
         .history-controls .search-input { flex: 1; min-width: 220px; }
-        .history-controls input[type="month"] {
+        .history-controls input[type="date"] {
             padding: 10px 14px;
             border: 1px solid var(--green-dark);
             border-radius: 999px;
@@ -415,12 +384,31 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
             min-width: 170px;
             cursor: pointer;
         }
+        .print-btn {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 9px 18px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .print-btn:hover { background: #222; }
+
         .history-list { list-style: none; padding: 0; margin: 0 0 16px 0; }
         .history-list li { padding: 14px 0; border-bottom: 1px solid #e2f0e6; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea { position: absolute; left: 0; top: 0; width: 100%; }
+        }
     </style>
 </head>
 <body>
-
 <?php include '../components/sidebar.php'; ?>
 
 <div class="main-content">
@@ -599,7 +587,8 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
         <div class="modal-body">
             <div class="history-controls">
                 <input type="text" id="historySearch" class="search-input" placeholder="Search book name...">
-                <input type="month" id="historyDateFilter" title="Select specific month and year (blank = all)">
+                <input type="date" id="historyDateFilter" title="Filter by exact date (leave blank for all)">
+                <button class="print-btn" onclick="openPrintPage()"><i class="fas fa-print"></i> Print</button>
             </div>
             <ul class="history-list" id="historyList"></ul>
             <div class="history-pagination" id="historyPagination"></div>
@@ -666,20 +655,17 @@ function renderBooks() {
                             ${book.low_stock_limit},
                             ${book.supplier_id ?? 'null'}
                         )">
-                    <i class="fas fa-edit"></i>
-                    <span>Edit</span>
+                    <i class="fas fa-edit"></i> <span>Edit</span>
                 </button>
                 <button class="action-btn sold"
                         onclick="openSoldModal(${book.book_id}, '${book.book_name.replace(/'/g, "\\'")}', ${book.quantity})">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span>Sold</span>
+                    <i class="fas fa-shopping-cart"></i> <span>Sold</span>
                 </button>
             </td>
         `;
         booksTableBody.appendChild(tr);
     });
 
-    // Pagination
     booksPagination.innerHTML = '';
     if (totalPages > 1) {
         const prevBtn = document.createElement('button');
@@ -704,7 +690,6 @@ function renderBooks() {
     }
 }
 
-// Filter & Search events
 document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -714,16 +699,11 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
     });
 });
 
-bookSearchInput.addEventListener('input', () => {
-    currentPage = 1;
-    renderBooks();
-});
-
-// Initial render
+bookSearchInput.addEventListener('input', () => { currentPage = 1; renderBooks(); });
 renderBooks();
 
 // ────────────────────────────────────────────────
-// Modal functions
+// Modal open functions
 // ────────────────────────────────────────────────
 function openSoldModal(id, title, stock) {
     document.getElementById('sold_book_id').value = id;
@@ -754,21 +734,28 @@ function openEditModal(id, name, grade, subj, price, qty, limit, sup) {
     document.getElementById('editModal').classList.add('active');
 }
 
+// ────────────────────────────────────────────────
+// HISTORY RENDERING
+// ────────────────────────────────────────────────
 const allHistory = <?= json_encode($history) ?>;
 let historyPage = 1;
 const historyPerPage = 10;
 const historySearch = document.getElementById('historySearch');
-const historyMonth = document.getElementById('historyDateFilter');
+const historyDate = document.getElementById('historyDateFilter');
 const historyList = document.getElementById('historyList');
 const historyPagination = document.getElementById('historyPagination');
 
 function renderHistory() {
     const term = historySearch.value.toLowerCase().trim();
-    const month = historyMonth.value;
+    const selectedDate = historyDate.value;
 
     const filtered = allHistory.filter(item => {
         const nameMatch = item.book_name.toLowerCase().includes(term);
-        const dateMatch = !month || item.sold_at.startsWith(month);
+        let dateMatch = true;
+        if (selectedDate) {
+            const itemDate = item.sold_at.split(' ')[0];
+            dateMatch = itemDate === selectedDate;
+        }
         return nameMatch && dateMatch;
     });
 
@@ -790,10 +777,7 @@ function renderHistory() {
             <span style="color:var(--red); font-weight:500;">Sold ${h.quantity_sold} pcs</span>
             <span style="color:#555; margin-left:10px;">₱${(h.price_at_sale * h.quantity_sold).toFixed(2)}</span>
             <div style="color:#6b8e5f; font-size:0.9rem; margin-top:4px;">
-                ${new Date(h.sold_at).toLocaleString('en-US', {
-                    month: 'short', day: 'numeric', year: 'numeric',
-                    hour: 'numeric', minute: '2-digit', hour12: true
-                })}
+                ${new Date(h.sold_at).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true })}
             </div>
         `;
         historyList.appendChild(li);
@@ -826,18 +810,152 @@ function renderHistory() {
 function resetHistoryView() {
     historyPage = 1;
     historySearch.value = '';
-    historyMonth.value = '';
+    historyDate.value = '';
     renderHistory();
 }
 
 historySearch.addEventListener('input', () => { historyPage = 1; renderHistory(); });
-historyMonth.addEventListener('change', () => { historyPage = 1; renderHistory(); });
+historyDate.addEventListener('change', () => { historyPage = 1; renderHistory(); });
 
 document.getElementById('historyModal').addEventListener('transitionend', e => {
-    if (e.target.classList.contains('active')) {
-        resetHistoryView();
-    }
+    if (e.target.classList.contains('active')) resetHistoryView();
 });
+
+// ────────────────────────────────────────────────
+// PRINT PAGE FUNCTION
+// ────────────────────────────────────────────────
+function openPrintPage() {
+    const term = historySearch.value.trim();
+    const selectedDate = historyDate.value;
+
+    let filtered = allHistory;
+    if (term) {
+        filtered = filtered.filter(h => h.book_name.toLowerCase().includes(term.toLowerCase()));
+    }
+    if (selectedDate) {
+        filtered = filtered.filter(h => h.sold_at.startsWith(selectedDate));
+    }
+
+    if (filtered.length === 0) {
+        alert("Walang makukuhang data para i-print.");
+        return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Book Sales History - Print</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 30px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2e7d5e;
+            margin-bottom: 10px;
+        }
+        .info {
+            text-align: center;
+            color: #555;
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background: #e8f5e9;
+            color: #1a4d2e;
+        }
+        .total-row {
+            font-weight: bold;
+            background: #f0f7f2;
+        }
+        .print-button {
+            display: block;
+            margin: 0 auto 30px;
+            padding: 12px 30px;
+            font-size: 18px;
+            background: #2e7d5e;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .print-button:hover {
+            background: #1a4d2e;
+        }
+        @media print {
+            .print-button { display: none; }
+            body { margin: 15mm; }
+        }
+    </style>
+</head>
+<body>
+    <button class="print-button" onclick="window.print()">Print</button>
+
+    <h1>Book Sales History</h1>
+    <div class="info">
+        ${selectedDate ? `Date: ${new Date(selectedDate).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })}<br>` : ''}
+        ${term ? `Search: "${term}"<br>` : ''}
+        Generated: ${new Date().toLocaleString()}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Date Sold</th>
+                <th>Book Name</th>
+                <th>Qty Sold</th>
+                <th>Price per Unit</th>
+                <th>Total Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+    `);
+
+    let grandTotal = 0;
+    filtered.forEach(h => {
+        const total = h.quantity_sold * h.price_at_sale;
+        grandTotal += total;
+        printWindow.document.write(`
+            <tr>
+                <td>${new Date(h.sold_at).toLocaleString('en-US')}</td>
+                <td>${h.book_name}</td>
+                <td>${h.quantity_sold}</td>
+                <td>₱${Number(h.price_at_sale).toFixed(2)}</td>
+                <td>₱${Number(total).toFixed(2)}</td>
+            </tr>
+        `);
+    });
+
+    printWindow.document.write(`
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td colspan="4" style="text-align:right;">Grand Total</td>
+                <td>₱${Number(grandTotal).toFixed(2)}</td>
+            </tr>
+        </tfoot>
+    </table>
+
+</body>
+</html>
+    `);
+
+    printWindow.document.close();
+}
 </script>
 </body>
 </html>

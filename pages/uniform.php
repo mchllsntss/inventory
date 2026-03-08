@@ -1,135 +1,128 @@
 <?php
-// uniform.php - Uniforms List with Add & Edit Modal, Sold, Pagination, History & Total Amount
+// uniforms.php - Uniforms Management (fixed edit query - removed updated_at)
 require_once '../connection/dbconnection.php';
 $conn = $GLOBALS['conn'];
-
 $current_page = 'uniforms';
-
 $message = '';
 
+// ────────────────────────────────────────────────
 // Handle Sold Action
-if (isset($_GET['action']) && $_GET['action'] === 'sold' && isset($_GET['id'])) {
-    $id = (int)$_GET['id'];
-    $get = mysqli_fetch_assoc(mysqli_query($conn, "SELECT price, quantity FROM uniform WHERE uniform_id = $id"));
-    if ($get && $get['quantity'] > 0) {
-        $price_at_sale = $get['price'];
-        mysqli_query($conn, "UPDATE uniform SET quantity = quantity - 1 WHERE uniform_id = $id");
-        mysqli_query($conn, "INSERT INTO uniform_sales_history (uniform_id, quantity_sold, price_at_sale) 
-                             VALUES ($id, 1, $price_at_sale)");
-    }
-    header("Location: uniform.php?msg=sold");
-    exit;
-}
-
-// Handle Add Uniform (via modal POST)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_uniform') {
-    $uniform_name      = mysqli_real_escape_string($conn, trim($_POST['uniform_name'] ?? ''));
-    $category          = $_POST['category'] ?? '';
-    $size              = mysqli_real_escape_string($conn, trim($_POST['size'] ?? ''));
-    $color             = mysqli_real_escape_string($conn, trim($_POST['color'] ?? ''));
-    $price             = floatval($_POST['price'] ?? 0);
-    $quantity          = (int)($_POST['quantity'] ?? 0);
-    $low_stock_limit   = (int)($_POST['low_stock_limit'] ?? 10);
-    $supplier_id       = !empty($_POST['supplier_id']) ? (int)$_POST['supplier_id'] : NULL;
-
-    if (empty($uniform_name) || empty($category) || empty($size) || empty($color) || $price <= 0 || $quantity < 0) {
-        $message = '<div style="background:#ffebee; color:#c62828; padding:14px 20px; border-radius:12px; margin-bottom:24px;">
-                        <strong>Error:</strong> Please fill all required fields correctly.
-                    </div>';
+// ────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'sold_uniform') {
+    $id = (int)($_POST['uniform_id'] ?? 0);
+    $qty_sold = (int)($_POST['quantity_sold'] ?? 0);
+    if ($id <= 0 || $qty_sold <= 0) {
+        $message = '<div class="alert error">Invalid quantity or uniform ID.</div>';
     } else {
-        $supplier_sql = $supplier_id ? $supplier_id : 'NULL';
-        $query = "INSERT INTO uniform 
-                  (uniform_name, category, size, color, price, quantity, low_stock_limit, supplier_id, date_added)
-                  VALUES 
-                  ('$uniform_name', '$category', '$size', '$color', $price, $quantity, $low_stock_limit, $supplier_sql, NOW())";
-
-        if (mysqli_query($conn, $query)) {
-            $message = '<div style="background:#e2f0e6; color:#1a4d2e; padding:14px 20px; border-radius:12px; margin-bottom:24px; display:flex; align-items:center; gap:10px;">
-                            <i class="fas fa-check-circle" style="font-size:20px;"></i>
-                            Uniform added successfully!
-                        </div>';
+        $get = mysqli_fetch_assoc(mysqli_query($conn, "SELECT price, quantity FROM uniform WHERE uniform_id = $id"));
+        if (!$get) {
+            $message = '<div class="alert error">Uniform not found.</div>';
+        } elseif ($get['quantity'] < $qty_sold) {
+            $message = '<div class="alert error">Not enough stock. Only ' . $get['quantity'] . ' available.</div>';
         } else {
-            $message = '<div style="background:#ffebee; color:#c62828; padding:14px 20px; border-radius:12px; margin-bottom:24px;">
-                            <strong>Error adding uniform:</strong> ' . mysqli_error($conn) . '
-                        </div>';
+            $price_at_sale = $get['price'];
+            mysqli_query($conn, "UPDATE uniform SET quantity = quantity - $qty_sold WHERE uniform_id = $id");
+            mysqli_query($conn, "INSERT INTO uniform_sales_history (uniform_id, quantity_sold, price_at_sale) VALUES ($id, $qty_sold, $price_at_sale)");
+            $message = '<div class="alert success"><i class="fas fa-check-circle"></i> Successfully sold ' . $qty_sold . ' uniform(s)!</div>';
         }
     }
 }
 
-// Handle Edit via POST
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_uniform') {
-    $id                = (int)$_POST['uniform_id'];
-    $uniform_name      = mysqli_real_escape_string($conn, trim($_POST['uniform_name']));
-    $category          = $_POST['category'];
-    $size              = mysqli_real_escape_string($conn, trim($_POST['size']));
-    $color             = mysqli_real_escape_string($conn, trim($_POST['color']));
-    $price             = floatval($_POST['price']);
-    $quantity          = (int)$_POST['quantity'];
-    $low_stock_limit   = (int)$_POST['low_stock_limit'];
-    $supplier_id       = !empty($_POST['supplier_id']) ? (int)$_POST['supplier_id'] : NULL;
+// ────────────────────────────────────────────────
+// Handle Add Uniform
+// ────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_uniform') {
+    $uniform_name    = mysqli_real_escape_string($conn, trim($_POST['uniform_name'] ?? ''));
+    $category        = $_POST['category'] ?? '';
+    $gender          = $_POST['gender'] ?? $category;
+    $school_level    = mysqli_real_escape_string($conn, trim($_POST['school_level'] ?? ''));
+    $item_type       = mysqli_real_escape_string($conn, trim($_POST['item_type'] ?? ''));
+    $size            = mysqli_real_escape_string($conn, trim($_POST['size'] ?? ''));
+    $color           = mysqli_real_escape_string($conn, trim($_POST['color'] ?? ''));
+    $price           = floatval($_POST['price'] ?? 0);
+    $quantity        = (int)($_POST['quantity'] ?? 0);
+    $low_stock_limit = (int)($_POST['low_stock_limit'] ?? 10);
+    $supplier_id     = !empty($_POST['supplier_id']) ? (int)$_POST['supplier_id'] : NULL;
 
-    $supplier_sql = $supplier_id ? $supplier_id : 'NULL';
-
-    $query = "UPDATE uniform SET 
-                uniform_name      = '$uniform_name',
-                category          = '$category',
-                size              = '$size',
-                color             = '$color',
-                price             = $price,
-                quantity          = $quantity,
-                low_stock_limit   = $low_stock_limit,
-                supplier_id       = $supplier_sql,
-                updated_at        = NOW()
-              WHERE uniform_id = $id";
-
-    if (mysqli_query($conn, $query)) {
-        $message = '<div style="background:#e2f0e6; color:#1a4d2e; padding:14px 20px; border-radius:12px; margin-bottom:24px; display:flex; align-items:center; gap:10px;">
-                        <i class="fas fa-check-circle" style="font-size:20px;"></i>
-                        Uniform updated successfully!
-                    </div>';
+    if (empty($uniform_name) || empty($category) || empty($size) || $price <= 0 || $quantity < 0) {
+        $message = '<div class="alert error">Please fill all required fields correctly.</div>';
     } else {
-        $message = '<div style="background:#ffebee; color:#c62828; padding:14px 20px; border-radius:12px; margin-bottom:24px;">
-                        <strong>Error updating:</strong> ' . mysqli_error($conn) . '
-                    </div>';
+        $supplier_sql = $supplier_id ? $supplier_id : 'NULL';
+        $query = "INSERT INTO uniform (uniform_name, category, gender, school_level, item_type, size, color, price, quantity, low_stock_limit, supplier_id, date_added)
+                  VALUES ('$uniform_name', '$category', '$gender', '$school_level', '$item_type', '$size', '$color', $price, $quantity, $low_stock_limit, $supplier_sql, NOW())";
+        if (mysqli_query($conn, $query)) {
+            $message = '<div class="alert success"><i class="fas fa-check-circle"></i> Uniform added successfully!</div>';
+        } else {
+            $message = '<div class="alert error">Error adding uniform: ' . mysqli_error($conn) . '</div>';
+        }
     }
 }
 
-// Pagination (5 per page)
-$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-$limit = 5;
-$offset = ($page - 1) * $limit;
-$total_query = "SELECT COUNT(*) as total FROM uniform";
-$total = mysqli_fetch_assoc(mysqli_query($conn, $total_query))['total'] ?? 0;
-$pages = ceil($total / $limit);
+// ────────────────────────────────────────────────
+// Handle Edit Uniform
+// ────────────────────────────────────────────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_uniform') {
+    $id              = (int)$_POST['uniform_id'];
+    $uniform_name    = mysqli_real_escape_string($conn, trim($_POST['uniform_name']));
+    $category        = $_POST['category'];
+    $gender          = $_POST['gender'] ?? $category;
+    $school_level    = mysqli_real_escape_string($conn, trim($_POST['school_level']));
+    $item_type       = mysqli_real_escape_string($conn, trim($_POST['item_type']));
+    $size            = mysqli_real_escape_string($conn, trim($_POST['size']));
+    $color           = mysqli_real_escape_string($conn, trim($_POST['color']));
+    $price           = floatval($_POST['price']);
+    $quantity        = (int)$_POST['quantity'];
+    $low_stock_limit = (int)$_POST['low_stock_limit'];
+    $supplier_id     = !empty($_POST['supplier_id']) ? (int)$_POST['supplier_id'] : NULL;
+    $supplier_sql    = $supplier_id ? $supplier_id : 'NULL';
 
-// Fetch uniforms with pagination
-$query = "SELECT u.*, s.supplier_name 
-          FROM uniform u 
-          LEFT JOIN suppliers s ON u.supplier_id = s.id 
-          ORDER BY u.uniform_name ASC 
-          LIMIT $offset, $limit";
-$uniforms = mysqli_fetch_all(mysqli_query($conn, $query), MYSQLI_ASSOC);
+    $query = "UPDATE uniform SET
+                uniform_name    = '$uniform_name',
+                category        = '$category',
+                gender          = '$gender',
+                school_level    = '$school_level',
+                item_type       = '$item_type',
+                size            = '$size',
+                color           = '$color',
+                price           = $price,
+                quantity        = $quantity,
+                low_stock_limit = $low_stock_limit,
+                supplier_id     = $supplier_sql
+              WHERE uniform_id = $id";
 
-// Fetch suppliers for add & edit modal (only uniform or both)
+    if (mysqli_query($conn, $query)) {
+        $message = '<div class="alert success"><i class="fas fa-check-circle"></i> Uniform updated successfully!</div>';
+    } else {
+        $message = '<div class="alert error">Error updating uniform: ' . mysqli_error($conn) . '</div>';
+    }
+}
+
+// ────────────────────────────────────────────────
+// Load data
+// ────────────────────────────────────────────────
+$all_uniforms = mysqli_fetch_all(mysqli_query($conn, "
+    SELECT u.*, s.supplier_name
+    FROM uniform u
+    LEFT JOIN suppliers s ON u.supplier_id = s.id
+    ORDER BY u.uniform_name ASC
+"), MYSQLI_ASSOC);
+
 $suppliers = mysqli_fetch_all(mysqli_query($conn, "
-    SELECT id, supplier_name 
-    FROM suppliers 
-    WHERE status = 'active' 
-      AND supplier_type IN ('uniforms', 'both') 
+    SELECT id, supplier_name FROM suppliers
+    WHERE status = 'active' AND supplier_type IN ('uniforms', 'both')
     ORDER BY supplier_name ASC
 "), MYSQLI_ASSOC);
 
-// Fetch sales history (latest 20)
 $history = mysqli_fetch_all(mysqli_query($conn, "
-    SELECT h.*, u.uniform_name 
-    FROM uniform_sales_history h 
-    JOIN uniform u ON h.uniform_id = u.uniform_id 
-    ORDER BY h.sold_at DESC LIMIT 20
+    SELECT h.*, u.uniform_name, u.size, u.color
+    FROM uniform_sales_history h
+    JOIN uniform u ON h.uniform_id = u.uniform_id
+    ORDER BY h.sold_at DESC
 "), MYSQLI_ASSOC);
 
-// Total amount sold (quantity × price_at_sale)
-$total_amount_query = "SELECT SUM(quantity_sold * price_at_sale) as total_amount FROM uniform_sales_history";
-$total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['total_amount'] ?? 0;
+$total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
+    SELECT SUM(quantity_sold * price_at_sale) as total FROM uniform_sales_history
+"))['total'] ?? 0;
 ?>
 
 <!DOCTYPE html>
@@ -140,226 +133,308 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['to
     <title>La Trinidad Academy · Uniforms</title>
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.4/css/all.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600&display=swap" rel="stylesheet">
-
     <style>
-        body { background:#f0f7f2; font-family:'Inter',sans-serif; color:#1e3c2c; margin:0; }
-        .main-content { padding:24px 32px; }
-        .dashboard { max-width:1440px; margin:0 auto; }
-        .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; flex-wrap:wrap; gap:16px; }
-        h1 { font-family:'Outfit',sans-serif; color:#1a4d2e; display:flex; align-items:center; gap:12px; }
-        .btn-primary { background:#2e7d5e; color:white; border:none; border-radius:40px; padding:10px 24px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; }
-        .btn-primary:hover { background:#1a4d2e; }
-        .filter-bar { display:flex; gap:10px; margin-bottom:24px; flex-wrap:wrap; }
-        .filter-btn { padding:8px 16px; border-radius:40px; background:white; border:1px solid #d4e8da; cursor:pointer; }
-        .filter-btn.active { background:#2e7d5e; color:white; border-color:#1a4d2e; }
-        .table-container { background:white; border-radius:24px; overflow:hidden; border:1px solid #d4e8da; box-shadow:0 8px 20px rgba(0,0,0,0.06); }
-        table { width:100%; border-collapse:collapse; }
-        th, td { padding:14px 16px; text-align:left; }
-        th { background:#e8f5e9; font-weight:600; color:#1a4d2e; }
-        tr:hover { background:#f8fdfa; }
-        .action-buttons { display:flex; gap:8px; }
-        .edit-btn { background:#0288d1; color:white; border:none; padding:6px 12px; border-radius:30px; cursor:pointer; font-size:13px; }
-        .sold-btn { background:#d32f2f; color:white; border:none; padding:6px 12px; border-radius:30px; cursor:pointer; font-size:13px; }
-        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
-        .modal-overlay.active { display:flex; }
-        .modal-container { background:white; border-radius:24px; width:90%; max-width:700px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 40px rgba(0,0,0,0.2); }
-        .modal-header { padding:24px; border-bottom:1px solid #e2f0e6; display:flex; justify-content:space-between; align-items:center; }
-        .modal-body { padding:32px; }
-        .form-group { margin-bottom:20px; }
-        .form-group label { display:block; margin-bottom:6px; font-weight:500; color:#1a4d2e; }
-        .form-control { width:100%; padding:10px 14px; border:1px solid #d4e8da; border-radius:12px; }
-        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-        .form-actions { display:flex; justify-content:flex-end; gap:12px; margin-top:24px; }
-        .history-section { margin-top:40px; background:white; border-radius:24px; padding:24px; border:1px solid #d4e8da; }
-        .pagination { margin-top:20px; text-align:center; }
-        .pagination a { margin:0 8px; padding:8px 16px; border-radius:30px; background:#e8f5e9; text-decoration:none; color:#1a4d2e; }
-        .pagination a.active { background:#2e7d5e; color:white; }
-        .total-amount { font-size:20px; font-weight:600; color:#1a4d2e; text-align:center; margin:20px 0; }
+        :root {
+            --green: #2e7d5e;
+            --green-dark: #1a4d2e;
+            --red: #d32f2f;
+            --red-dark: #b71c1c;
+            --light: #e8f5e9;
+            --bg: #f0f7f2;
+            --blue: #0288d1;
+            --blue-dark: #0277bd;
+            --orange: #f57c00;
+            --orange-dark: #ef6c00;
+        }
+        body { background: var(--bg); font-family: 'Inter', sans-serif; color: #1e3c2c; margin: 0; }
+        .main-content { padding: 24px 32px; }
+        .dashboard { max-width: 1440px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+        h1 { font-family: 'Outfit', sans-serif; color: #1a4d2e; display: flex; align-items: center; gap: 12px; margin: 0; }
+        .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .btn-pill { background: var(--green); color: white; border: none; border-radius: 999px; padding: 10px 20px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .btn-pill:hover { background: var(--green-dark); }
+        .btn-outline { background: transparent; color: var(--green); border: 2px solid var(--green); }
+        .btn-outline:hover { background: var(--green); color: white; }
+        .top-controls { display: flex; align-items: center; gap: 40px; margin-bottom: 24px; flex-wrap: wrap; }
+        .search-container { flex: 1; min-width: 260px; }
+        .search-input { width: 100%; padding: 12px 16px; border: 1px solid #d4e8da; border-radius: 999px; font-size: 16px; box-sizing: border-box; }
+        .search-input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(46,125,94,0.15); }
+        .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; max-width: 100%; }
+        .filter-btn { padding: 9px 16px; border-radius: 999px; background: white; border: 1px solid #d4e8da; cursor: pointer; font-weight: 500; color: #1a4d2e; white-space: nowrap; }
+        .filter-btn.active { background: var(--green); color: white; border-color: var(--green-dark); }
+        .table-container { background: white; border-radius: 16px; overflow: hidden; border: 1px solid #d4e8da; box-shadow: 0 6px 16px rgba(0,0,0,0.05); }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { padding: 14px 10px; text-align: left; vertical-align: middle; font-size: 14px; box-sizing: border-box; }
+        th { background: var(--light); font-weight: 600; color: #1a4d2e; white-space: nowrap; }
+        tr:hover { background: #f8fdfa; }
+        th:nth-child(1), td:nth-child(1) { width: 19%; }
+        th:nth-child(2), td:nth-child(2) { width: 8%; }
+        th:nth-child(3), td:nth-child(3) { width: 11%; }
+        th:nth-child(4), td:nth-child(4) { width: 10%; }
+        th:nth-child(5), td:nth-child(5) { width: 8%; }
+        th:nth-child(6), td:nth-child(6) { width: 9%; text-align: right; }
+        th:nth-child(7), td:nth-child(7) { width: 9%; text-align: right; }
+        th:nth-child(8), td:nth-child(8) { width: 8%; }
+        th:nth-child(9), td:nth-child(9) { width: 18%; min-width: 190px; }
+        td { overflow: hidden; text-overflow: ellipsis; }
+        td:nth-child(1) { white-space: normal; word-break: break-word; }
+        .action-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+        .action-btn {
+            padding: 8px 12px;
+            font-size: 13px;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s;
+            pointer-events: auto !important;
+            z-index: 10;
+        }
+        .action-btn i { font-size: 1.15em; }
+        .action-btn.view  { background: var(--orange); color: white; }
+        .action-btn.edit  { background: var(--blue);   color: white; }
+        .action-btn.sold  { background: var(--red);    color: white; }
+        .action-btn:hover.view { background: var(--orange-dark); }
+        .action-btn:hover.edit { background: var(--blue-dark); }
+        .action-btn:hover.sold { background: var(--red-dark); }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+        .badge.male { background: #bbdefb; color: #0d47a1; }
+        .badge.female { background: #f8bbd0; color: #880e4f; }
+        .badge.low-stock { background: #ffcdd2; color: #b71c1c; }
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999 !important;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto !important;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-container {
+            background: white;
+            border-radius: 24px;
+            width: 90%;
+            max-width: 820px;
+            max-height: 88vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+        }
+        .modal-header {
+            padding: 20px 28px;
+            border-bottom: 1px solid #e2f0e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+        .modal-body { padding: 24px 28px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .form-grid .full-width { grid-column: 1/-1; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; color: #1a4d2e; }
+        .form-control { width: 100%; padding: 10px 14px; border: 1px solid #d4e8da; border-radius: 12px; font-size: 15px; box-sizing: border-box; }
+        .form-control:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(46,125,94,0.1); }
+        .form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 28px; grid-column: 1/-1; }
+        .form-actions button { padding: 12px 28px; font-size: 16px; font-weight: 600; border: none; cursor: pointer; border-radius: 999px; min-width: 140px; }
+        .save-btn, .confirm-btn { background: var(--green); color: white; }
+        .save-btn:hover, .confirm-btn:hover { background: var(--green-dark); }
+        .btn-cancel { background: var(--red); color: white; }
+        .client-pagination { margin-top: 20px; text-align: center; }
+        .client-pagination button { margin: 0 5px; padding: 8px 14px; border-radius: 999px; background: #e8f5e9; border: none; cursor: pointer; font-size: 14px; color: #1a4d2e; }
+        .client-pagination button.active { background: var(--green); color: white; }
+        .client-pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .total-amount { font-size: 20px; font-weight: 600; color: #1a4d2e; text-align: center; margin: 32px 0; }
+        .alert { padding: 14px 20px; border-radius: 12px; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+        .alert.success { background: #e2f0e6; color: #1a4d2e; }
+        .alert.error { background: #ffebee; color: #c62828; }
+        .history-controls { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+        .history-controls .search-input { flex: 1; min-width: 220px; }
+        .history-controls input[type="date"] { padding: 10px 14px; border: 1px solid var(--green-dark); border-radius: 999px; background: var(--green); color: white; font-size: 15px; min-width: 170px; cursor: pointer; }
+        .history-controls input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+        .print-btn { background: #444; color: white; border: none; padding: 9px 18px; border-radius: 999px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+        .print-btn:hover { background: #222; }
+        .history-item {
+            padding: 16px;
+            background: #f8fdfa;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--green);
+        }
+        .history-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .history-date { color: #555; font-size: 13px; }
+        .print-area { display: none; }
+        @media print {
+            body * { visibility: hidden; }
+            .print-area, .print-area * { visibility: visible; }
+            .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none !important; }
+        }
     </style>
 </head>
 <body>
-
 <?php include '../components/sidebar.php'; ?>
 
 <div class="main-content">
     <div class="dashboard">
         <div class="header">
             <h1><i class="fas fa-tshirt"></i> Uniform Management</h1>
-            <button class="btn-primary" onclick="document.getElementById('addModal').classList.add('active')">
-                <i class="fas fa-plus"></i> Add Uniform
-            </button>
+            <div class="header-right">
+                <button class="btn-pill btn-outline" onclick="document.getElementById('historyModal').classList.add('active'); resetHistoryView();">
+                    <i class="fas fa-history"></i> Sales History
+                </button>
+                <button class="btn-pill" onclick="document.getElementById('addModal').classList.add('active')">
+                    <i class="fas fa-plus"></i> Add Uniform
+                </button>
+            </div>
         </div>
 
         <?= $message ?>
 
-        <!-- Filter -->
-        <div class="filter-bar">
-            <a href="?filter=all" class="filter-btn <?= $filter==='all'?'active':'' ?>">All</a>
-            <a href="?filter=boys" class="filter-btn <?= $filter==='boys'?'active':'' ?>">Boys</a>
-            <a href="?filter=girls" class="filter-btn <?= $filter==='girls'?'active':'' ?>">Girls</a>
-            <a href="?filter=pe" class="filter-btn <?= $filter==='pe'?'active':'' ?>">PE Uniform</a>
-            <a href="?filter=others" class="filter-btn <?= $filter==='others'?'active':'' ?>">Others</a>
+        <div class="top-controls">
+            <div class="search-container">
+                <input type="text" id="uniformSearch" class="search-input" placeholder="Search name, size, color, type...">
+            </div>
+            <div class="filter-bar" id="filterBar">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="male">Male</button>
+                <button class="filter-btn" data-filter="female">Female</button>
+                <button class="filter-btn" data-filter="Pre-school">Pre-school</button>
+                <button class="filter-btn" data-filter="Elementary">Elementary</button>
+                <button class="filter-btn" data-filter="Grade I-III">Grade I-III</button>
+                <button class="filter-btn" data-filter="Intermediate">Intermediate</button>
+                <button class="filter-btn" data-filter="High School">High School</button>
+            </div>
         </div>
 
-        <!-- Uniforms Table -->
         <div class="table-container">
             <table>
                 <thead>
                     <tr>
-                        <th>Name</th>
-                        <th>Category</th>
+                        <th>Uniform Name</th>
+                        <th>Gender</th>
+                        <th>Level</th>
+                        <th>Type</th>
                         <th>Size</th>
-                        <th>Color</th>
                         <th>Price</th>
-                        <th>Quantity</th>
-                        <th>Supplier</th>
+                        <th>Stock</th>
+                        <th>Color</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <?php if (empty($uniforms)): ?>
-                        <tr><td colspan="8" style="text-align:center; padding:60px;">No uniforms yet.</td></tr>
-                    <?php else: ?>
-                        <?php foreach ($uniforms as $u): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($u['uniform_name']) ?></td>
-                                <td><?= htmlspecialchars($u['category']) ?></td>
-                                <td><?= htmlspecialchars($u['size']) ?></td>
-                                <td><?= htmlspecialchars($u['color']) ?></td>
-                                <td>₱<?= number_format($u['price'], 2) ?></td>
-                                <td><?= number_format($u['quantity']) ?> pcs</td>
-                                <td><?= htmlspecialchars($u['supplier_name'] ?? '—') ?></td>
-                                <td class="action-buttons">
-                                    <button class="edit-btn" onclick="openEditModal(
-                                        <?= $u['uniform_id'] ?>,
-                                        '<?= addslashes($u['uniform_name']) ?>',
-                                        '<?= $u['category'] ?>',
-                                        '<?= addslashes($u['size']) ?>',
-                                        '<?= addslashes($u['color']) ?>',
-                                        <?= $u['price'] ?>,
-                                        <?= $u['quantity'] ?>,
-                                        <?= $u['low_stock_limit'] ?>,
-                                        <?= $u['supplier_id'] ?? 'null' ?>
-                                    )">
-                                        <i class="fas fa-edit"></i> Edit
-                                    </button>
-                                    <button class="sold-btn" onclick="if(confirm('Sold 1 piece?')) location.href='?action=sold&id=<?= $u['uniform_id'] ?>'">
-                                        Sold
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
+                <tbody id="uniformsTableBody"></tbody>
             </table>
         </div>
 
-        <!-- Pagination -->
-        <?php if ($pages > 1): ?>
-        <div class="pagination">
-            <?php if ($page > 1): ?>
-                <a href="?page=<?= $page-1 ?>">Previous</a>
-            <?php endif; ?>
-            <?php for ($i = 1; $i <= $pages; $i++): ?>
-                <a href="?page=<?= $i ?>" class="<?= $i == $page ? 'active' : '' ?>"><?= $i ?></a>
-            <?php endfor; ?>
-            <?php if ($page < $pages): ?>
-                <a href="?page=<?= $page+1 ?>">Next</a>
-            <?php endif; ?>
-        </div>
-        <?php endif; ?>
+        <div class="client-pagination" id="uniformsPagination"></div>
 
-        <!-- Total Amount Sold -->
         <div class="total-amount">
-            Total Amount from Sales: <span style="color:#2e7d5e;">₱<?= number_format($total_amount, 2) ?></span>
-        </div>
-
-        <!-- Sales History -->
-        <div class="history-section">
-            <h3 style="margin-bottom:16px; color:#1a4d2e;">Recent Sales History</h3>
-            <?php if (empty($history)): ?>
-                <p style="color:#4a6b57;">No sales recorded yet.</p>
-            <?php else: ?>
-                <ul style="list-style:none; padding:0;">
-                    <?php foreach ($history as $h): ?>
-                        <li style="padding:12px 0; border-bottom:1px solid #e2f0e6;">
-                            <strong><?= htmlspecialchars($h['uniform_name']) ?></strong> —
-                            <span style="color:#d32f2f;">Sold <?= $h['quantity_sold'] ?> pcs</span>
-                            (₱<?= number_format($h['price_at_sale'] * $h['quantity_sold'], 2) ?>) on 
-                            <?= date('M d, Y g:i A', strtotime($h['sold_at'])) ?>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
+            Total from Uniform Sales: <span style="color:var(--green);">₱<?= number_format($total_amount, 2) ?></span>
         </div>
     </div>
 </div>
 
-<!-- Add Uniform Modal -->
+<!-- Add Modal -->
 <div class="modal-overlay" id="addModal">
     <div class="modal-container">
         <div class="modal-header">
             <h2><i class="fas fa-plus-circle"></i> Add New Uniform</h2>
-            <button onclick="document.getElementById('addModal').classList.remove('active')" style="background:none;border:none;font-size:28px;cursor:pointer;color:#4a6b57;">×</button>
+            <button onclick="document.getElementById('addModal').classList.remove('active')">×</button>
         </div>
         <div class="modal-body">
             <form method="POST">
                 <input type="hidden" name="action" value="add_uniform">
-
-                <div class="form-group">
-                    <label>Uniform Name</label>
-                    <input type="text" name="uniform_name" class="form-control" required>
-                </div>
-
-                <div class="form-row">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label>Uniform Name *</label>
+                        <input type="text" name="uniform_name" class="form-control" required>
+                    </div>
                     <div class="form-group">
-                        <label>Category</label>
-                        <select name="category" class="form-control" required>
-                            <option value="Male">Boys</option>
-                            <option value="Female">Girls</option>
+                        <label>Category *</label>
+                        <select name="category" class="form-control" required onchange="this.form.gender.value = this.value">
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Size</label>
-                        <input type="text" name="size" class="form-control" required>
+                        <label>Gender</label>
+                        <select name="gender" class="form-control">
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
                     </div>
-                </div>
-
-                <div class="form-row">
+                    <div class="form-group">
+                        <label>School Level</label>
+                        <select name="school_level" class="form-control">
+                            <option value="">Select Level</option>
+                            <option value="Pre-school">Pre-school</option>
+                            <option value="Elementary">Elementary</option>
+                            <option value="Grade I-III">Grade I-III</option>
+                            <option value="Intermediate">Intermediate</option>
+                            <option value="High School">High School</option>
+                            <option value="All Levels">All Levels</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Item Type</label>
+                        <select name="item_type" class="form-control">
+                            <option value="">Select Type</option>
+                            <option value="Skirt">Skirt</option>
+                            <option value="Blouse">Blouse</option>
+                            <option value="Dress">Dress</option>
+                            <option value="Polo">Polo</option>
+                            <option value="Shorts">Shorts</option>
+                            <option value="Jogging Pants">Jogging Pants</option>
+                            <option value="Shirt">Shirt</option>
+                            <option value="PE Uniform">PE Uniform</option>
+                            <option value="Accessory">Accessory</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Size *</label>
+                        <input type="text" name="size" class="form-control" placeholder="e.g. Small, XS, Waist 20 L18" required>
+                    </div>
                     <div class="form-group">
                         <label>Color</label>
-                        <input type="text" name="color" class="form-control" required>
+                        <input type="text" name="color" class="form-control" value="Default">
                     </div>
                     <div class="form-group">
-                        <label>Price (₱)</label>
+                        <label>Price (₱) *</label>
                         <input type="number" name="price" step="0.01" min="0" class="form-control" required>
                     </div>
-                </div>
-
-                <div class="form-row">
                     <div class="form-group">
-                        <label>Quantity</label>
+                        <label>Quantity *</label>
                         <input type="number" name="quantity" min="0" class="form-control" required>
                     </div>
                     <div class="form-group">
                         <label>Low Stock Limit</label>
                         <input type="number" name="low_stock_limit" min="1" value="10" class="form-control">
                     </div>
+                    <div class="form-group full-width">
+                        <label>Supplier</label>
+                        <select name="supplier_id" class="form-control">
+                            <option value="">No Supplier</option>
+                            <?php foreach ($suppliers as $s): ?>
+                                <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['supplier_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
-
-                <div class="form-group">
-                    <label>Supplier</label>
-                    <select name="supplier_id" class="form-control">
-                        <option value="">No Supplier</option>
-                        <?php foreach ($suppliers as $s): ?>
-                            <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['supplier_name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
                 <div class="form-actions">
-                    <button type="button" onclick="document.getElementById('addModal').classList.remove('active')" class="btn-secondary">Cancel</button>
-                    <button type="submit" class="btn-primary">Add Uniform</button>
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('addModal').classList.remove('active')">Cancel</button>
+                    <button type="submit" class="save-btn">Add Uniform</button>
                 </div>
             </form>
         </div>
@@ -371,87 +446,482 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, $total_amount_query))['to
     <div class="modal-container">
         <div class="modal-header">
             <h2><i class="fas fa-edit"></i> Edit Uniform</h2>
-            <button onclick="document.getElementById('editModal').classList.remove('active')" style="background:none;border:none;font-size:28px;cursor:pointer;color:#4a6b57;">×</button>
+            <button onclick="document.getElementById('editModal').classList.remove('active')">×</button>
         </div>
         <div class="modal-body">
             <form method="POST">
                 <input type="hidden" name="action" value="edit_uniform">
                 <input type="hidden" name="uniform_id" id="edit_uniform_id">
-
-                <div class="form-group">
-                    <label>Uniform Name</label>
-                    <input type="text" name="uniform_name" id="edit_uniform_name" class="form-control" required>
-                </div>
-
-                <div class="form-row">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label>Uniform Name *</label>
+                        <input type="text" name="uniform_name" id="edit_uniform_name" class="form-control" required>
+                    </div>
                     <div class="form-group">
-                        <label>Category</label>
+                        <label>Category *</label>
                         <select name="category" id="edit_category" class="form-control" required>
-                            <option value="Male">Boys</option>
-                            <option value="Female">Girls</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Size</label>
+                        <label>Gender</label>
+                        <select name="gender" id="edit_gender" class="form-control">
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>School Level</label>
+                        <select name="school_level" id="edit_school_level" class="form-control">
+                            <option value="">Select Level</option>
+                            <option value="Pre-school">Pre-school</option>
+                            <option value="Elementary">Elementary</option>
+                            <option value="Grade I-III">Grade I-III</option>
+                            <option value="Intermediate">Intermediate</option>
+                            <option value="High School">High School</option>
+                            <option value="All Levels">All Levels</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Item Type</label>
+                        <select name="item_type" id="edit_item_type" class="form-control">
+                            <option value="">Select Type</option>
+                            <option value="Skirt">Skirt</option>
+                            <option value="Blouse">Blouse</option>
+                            <option value="Dress">Dress</option>
+                            <option value="Polo">Polo</option>
+                            <option value="Shorts">Shorts</option>
+                            <option value="Jogging Pants">Jogging Pants</option>
+                            <option value="Shirt">Shirt</option>
+                            <option value="PE Uniform">PE Uniform</option>
+                            <option value="Accessory">Accessory</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Size *</label>
                         <input type="text" name="size" id="edit_size" class="form-control" required>
                     </div>
-                </div>
-
-                <div class="form-row">
                     <div class="form-group">
                         <label>Color</label>
-                        <input type="text" name="color" id="edit_color" class="form-control" required>
+                        <input type="text" name="color" id="edit_color" class="form-control">
                     </div>
                     <div class="form-group">
-                        <label>Price (₱)</label>
+                        <label>Price (₱) *</label>
                         <input type="number" name="price" id="edit_price" step="0.01" min="0" class="form-control" required>
                     </div>
-                </div>
-
-                <div class="form-row">
                     <div class="form-group">
-                        <label>Quantity</label>
+                        <label>Quantity *</label>
                         <input type="number" name="quantity" id="edit_quantity" min="0" class="form-control" required>
                     </div>
                     <div class="form-group">
                         <label>Low Stock Limit</label>
                         <input type="number" name="low_stock_limit" id="edit_low_stock_limit" min="1" class="form-control">
                     </div>
+                    <div class="form-group full-width">
+                        <label>Supplier</label>
+                        <select name="supplier_id" id="edit_supplier_id" class="form-control">
+                            <option value="">No Supplier</option>
+                            <?php foreach ($suppliers as $s): ?>
+                                <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['supplier_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
-
-                <div class="form-group">
-                    <label>Supplier</label>
-                    <select name="supplier_id" id="edit_supplier_id" class="form-control">
-                        <option value="">No Supplier</option>
-                        <?php foreach ($suppliers as $s): ?>
-                            <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['supplier_name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
                 <div class="form-actions">
-                    <button type="button" onclick="document.getElementById('editModal').classList.remove('active')" class="btn-secondary">Cancel</button>
-                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('editModal').classList.remove('active')">Cancel</button>
+                    <button type="submit" class="save-btn">Save Changes</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
+<!-- Sold Modal -->
+<div class="modal-overlay" id="soldModal">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-shopping-cart"></i> Record Sale</h2>
+            <button onclick="document.getElementById('soldModal').classList.remove('active')">×</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="sold_uniform">
+                <input type="hidden" name="uniform_id" id="sold_uniform_id">
+                <div class="item-details">
+                    <div>
+                        <span>Item:</span>
+                        <span id="sold_uniform_title"></span>
+                    </div>
+                    <div>
+                        <span>Price:</span>
+                        <span id="sold_uniform_price"></span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Quantity to Sell *</label>
+                    <input type="number" name="quantity_sold" id="sold_quantity" min="1" value="1" class="form-control" required>
+                    <small id="stock_info" style="color:#666; margin-top:6px; display:block;"></small>
+                </div>
+                <div class="form-group">
+                    <label>Total Amount:</label>
+                    <div style="font-size: 24px; font-weight: 700; color: var(--green);" id="sold_total">₱0.00</div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('soldModal').classList.remove('active')">Cancel</button>
+                    <button type="submit" class="confirm-btn">Confirm Sale</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- View Modal -->
+<div class="modal-overlay" id="viewModal">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-eye"></i> Uniform Details</h2>
+            <button onclick="document.getElementById('viewModal').classList.remove('active')">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="item-details" id="view_details"></div>
+        </div>
+    </div>
+</div>
+
+<!-- History Modal -->
+<div class="modal-overlay" id="historyModal">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-history"></i> Uniform Sales History</h2>
+            <button onclick="document.getElementById('historyModal').classList.remove('active')">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="history-controls">
+                <input type="text" id="historySearch" class="search-input" placeholder="Search uniform name...">
+                <input type="date" id="historyDateFilter" title="Filter by exact date">
+                <button class="print-btn" onclick="printHistory()"><i class="fas fa-print"></i> Print</button>
+            </div>
+            <div id="historyList"></div>
+            <div class="client-pagination" id="historyPagination"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden print-friendly content -->
+<div class="print-area" id="printContent">
+    <h2 style="text-align:center; margin-bottom:8px;">La Trinidad Academy</h2>
+    <h3 style="text-align:center; margin-top:0;">Uniform Sales History</h3>
+    <p style="text-align:center; color:#555;" id="printDateRange"></p>
+    <hr style="border:1px solid #ccc; margin:16px 0;">
+    <table style="width:100%; border-collapse:collapse; font-family:Arial,sans-serif;">
+        <thead>
+            <tr style="background:#f0f7f2;">
+                <th style="padding:10px; border:1px solid #ddd; text-align:left;">Date Sold</th>
+                <th style="padding:10px; border:1px solid #ddd; text-align:left;">Item</th>
+                <th style="padding:10px; border:1px solid #ddd; text-align:center;">Qty</th>
+                <th style="padding:10px; border:1px solid #ddd; text-align:right;">Price</th>
+                <th style="padding:10px; border:1px solid #ddd; text-align:right;">Total</th>
+            </tr>
+        </thead>
+        <tbody id="printBody"></tbody>
+        <tfoot>
+            <tr style="font-weight:bold; background:#e8f5e9;">
+                <td colspan="4" style="padding:12px; text-align:right; border:1px solid #ddd;">Grand Total:</td>
+                <td style="padding:12px; text-align:right; border:1px solid #ddd;" id="printGrandTotal">₱0.00</td>
+            </tr>
+        </tfoot>
+    </table>
+    <div style="margin-top:40px; text-align:center; color:#777; font-size:13px;">
+        Generated on <?= date('M d, Y h:i A') ?> • For internal use only
+    </div>
+</div>
+
 <script>
-function openEditModal(id, name, cat, size, color, price, qty, limit, sup) {
-    document.getElementById('edit_uniform_id').value = id;
-    document.getElementById('edit_uniform_name').value = name;
-    document.getElementById('edit_category').value = cat;
-    document.getElementById('edit_size').value = size;
-    document.getElementById('edit_color').value = color;
-    document.getElementById('edit_price').value = price;
-    document.getElementById('edit_quantity').value = qty;
-    document.getElementById('edit_low_stock_limit').value = limit;
-    document.getElementById('edit_supplier_id').value = sup || '';
+// DATA
+const allUniforms = <?= json_encode($all_uniforms) ?>;
+const allHistory  = <?= json_encode($history) ?>;
+
+// ── Modal open functions ───────────────────────────────────────────────
+function openViewModal(id) {
+    const u = allUniforms.find(x => Number(x.uniform_id) === Number(id));
+    if (!u) return;
+    document.getElementById('view_details').innerHTML = `
+        <div><span>ID:</span><span>#${u.uniform_id}</span></div>
+        <div><span>Name:</span><span>${u.uniform_name}</span></div>
+        <div><span>Gender:</span><span>${u.gender || u.category || '—'}</span></div>
+        <div><span>Level:</span><span>${u.school_level || '—'}</span></div>
+        <div><span>Type:</span><span>${u.item_type || '—'}</span></div>
+        <div><span>Size:</span><span>${u.size || '—'}</span></div>
+        <div><span>Color:</span><span>${u.color || 'Default'}</span></div>
+        <div><span>Price:</span><span>₱${Number(u.price).toFixed(2)}</span></div>
+        <div><span>Stock:</span><span>${u.quantity} pcs</span></div>
+        <div><span>Supplier:</span><span>${u.supplier_name || '—'}</span></div>
+    `;
+    document.getElementById('viewModal').classList.add('active');
+}
+
+function openEditModal(id) {
+    const u = allUniforms.find(x => Number(x.uniform_id) === Number(id));
+    if (!u) return;
+    document.getElementById('edit_uniform_id').value = u.uniform_id;
+    document.getElementById('edit_uniform_name').value = u.uniform_name;
+    document.getElementById('edit_category').value = u.category || 'male';
+    document.getElementById('edit_gender').value = u.gender || u.category || 'male';
+    document.getElementById('edit_school_level').value = u.school_level || '';
+    document.getElementById('edit_item_type').value = u.item_type || '';
+    document.getElementById('edit_size').value = u.size || '';
+    document.getElementById('edit_color').value = u.color || 'Default';
+    document.getElementById('edit_price').value = u.price;
+    document.getElementById('edit_quantity').value = u.quantity;
+    document.getElementById('edit_low_stock_limit').value = u.low_stock_limit;
+    document.getElementById('edit_supplier_id').value = u.supplier_id || '';
     document.getElementById('editModal').classList.add('active');
 }
-</script>
 
+function openSoldModal(id) {
+    const u = allUniforms.find(x => Number(x.uniform_id) === Number(id));
+    if (!u) return;
+    document.getElementById('sold_uniform_id').value = u.uniform_id;
+    document.getElementById('sold_uniform_title').textContent = `${u.uniform_name} (${u.size || '—'})`;
+    document.getElementById('sold_uniform_price').textContent = `₱${Number(u.price).toFixed(2)}`;
+    const qtyInput = document.getElementById('sold_quantity');
+    qtyInput.value = 1;
+    qtyInput.max = u.quantity;
+    document.getElementById('stock_info').textContent = `Available stock: ${u.quantity} pcs`;
+    updateSoldTotal();
+    document.getElementById('soldModal').classList.add('active');
+}
+
+function updateSoldTotal() {
+    const qty = parseInt(document.getElementById('sold_quantity').value) || 0;
+    const price = parseFloat(document.getElementById('sold_uniform_price').textContent.replace('₱','')) || 0;
+    document.getElementById('sold_total').textContent = `₱${(qty * price).toFixed(2)}`;
+}
+
+// ── Uniform Table + Pagination ────────────────────────────────────────
+let currentPage = 1;
+const itemsPerPage = 10;
+
+function renderUniforms() {
+    const term = document.getElementById('uniformSearch').value.toLowerCase().trim();
+    const activeFilter = document.querySelector('#filterBar .filter-btn.active')?.dataset.filter || 'all';
+
+    const filtered = allUniforms.filter(u => {
+        const searchMatch =
+            (u.uniform_name   || '').toLowerCase().includes(term) ||
+            (u.item_type      || '').toLowerCase().includes(term) ||
+            (u.size           || '').toLowerCase().includes(term) ||
+            (u.color          || '').toLowerCase().includes(term);
+
+        let filterMatch = true;
+        if (activeFilter !== 'all') {
+            if (activeFilter === 'male' || activeFilter === 'female') {
+                filterMatch = (u.gender || u.category || '').toLowerCase() === activeFilter;
+            } else {
+                filterMatch = (u.school_level || '').toLowerCase() === activeFilter.toLowerCase();
+            }
+        }
+        return searchMatch && filterMatch;
+    });
+
+    const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+    currentPage = Math.min(currentPage, totalPages);
+    const start = (currentPage - 1) * itemsPerPage;
+    const pageItems = filtered.slice(start, start + itemsPerPage);
+
+    const tbody = document.getElementById('uniformsTableBody');
+    tbody.innerHTML = pageItems.length === 0
+        ? '<tr><td colspan="9" style="text-align:center; padding:60px;">No uniforms found.</td></tr>'
+        : '';
+
+    pageItems.forEach(u => {
+        const tr = document.createElement('tr');
+        const lowStock = u.quantity <= u.low_stock_limit ? 'badge low-stock' : '';
+        tr.innerHTML = `
+            <td title="${u.uniform_name}">${u.uniform_name}</td>
+            <td><span class="badge ${(u.gender||u.category||'').toLowerCase()}">${u.gender||u.category||'—'}</span></td>
+            <td>${u.school_level || '—'}</td>
+            <td>${u.item_type || '—'}</td>
+            <td>${u.size || '—'}</td>
+            <td>₱${Number(u.price).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</td>
+            <td><span class="${lowStock}">${Number(u.quantity).toLocaleString()} pcs</span></td>
+            <td>${u.color || 'Default'}</td>
+            <td class="action-buttons">
+                <button type="button" class="action-btn view"  onclick="openViewModal(${u.uniform_id})"><i class="fas fa-eye"></i></button>
+                <button type="button" class="action-btn edit"  onclick="openEditModal(${u.uniform_id})"><i class="fas fa-edit"></i></button>
+                <button type="button" class="action-btn sold"  onclick="openSoldModal(${u.uniform_id})"><i class="fas fa-shopping-cart"></i></button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    const pag = document.getElementById('uniformsPagination');
+    pag.innerHTML = '';
+    if (totalPages > 1) {
+        let html = `<button ${currentPage===1?'disabled':''} onclick="if(currentPage>1){currentPage--;renderUniforms()}">Previous</button>`;
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || Math.abs(i - currentPage) <= 2) {
+                html += `<button class="${i===currentPage?'active':''}" onclick="currentPage=${i};renderUniforms()">${i}</button>`;
+            } else if (Math.abs(i - currentPage) === 3) {
+                html += '<button disabled>...</button>';
+            }
+        }
+        html += `<button ${currentPage===totalPages?'disabled':''} onclick="if(currentPage<${totalPages}){currentPage++;renderUniforms()}">Next</button>`;
+        pag.innerHTML = html;
+    }
+}
+
+// ── History Rendering & Print ─────────────────────────────────────────
+let historyPage = 1;
+const historyPerPage = 10;
+
+function renderHistory() {
+    const searchTerm = document.getElementById('historySearch').value.toLowerCase().trim();
+    const dateFilter = document.getElementById('historyDateFilter').value;
+
+    const filtered = allHistory.filter(h => {
+        const nameMatch = (h.uniform_name || '').toLowerCase().includes(searchTerm);
+        let dateMatch = true;
+        if (dateFilter) {
+            const soldDate = new Date(h.sold_at).toISOString().split('T')[0];
+            dateMatch = soldDate === dateFilter;
+        }
+        return nameMatch && dateMatch;
+    });
+
+    const totalPages = Math.ceil(filtered.length / historyPerPage) || 1;
+    historyPage = Math.min(historyPage, totalPages);
+
+    const start = (historyPage - 1) * historyPerPage;
+    const pageItems = filtered.slice(start, start + historyPerPage);
+
+    const container = document.getElementById('historyList');
+    container.innerHTML = pageItems.length === 0
+        ? '<div style="text-align:center; padding:40px 0; color:#777;">No sales records found.</div>'
+        : '';
+
+    pageItems.forEach(h => {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = `
+            <div class="history-item-header">
+                <span>${h.uniform_name} (${h.size || '—'})</span>
+                <span class="history-date">${new Date(h.sold_at).toLocaleString('en-PH', {
+                    year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                })}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:14px;">
+                <div>
+                    <strong>Qty Sold:</strong> ${h.quantity_sold} pcs<br>
+                    <strong>Price at sale:</strong> ₱${Number(h.price_at_sale).toFixed(2)}
+                </div>
+                <div style="text-align:right; font-weight:600; font-size:16px; color:var(--green);">
+                    ₱${(h.quantity_sold * h.price_at_sale).toFixed(2)}
+                </div>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+
+    const pag = document.getElementById('historyPagination');
+    pag.innerHTML = '';
+    if (totalPages > 1) {
+        let html = `<button ${historyPage===1?'disabled':''} onclick="historyPage > 1 && (historyPage--, renderHistory())">Previous</button>`;
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || Math.abs(i - historyPage) <= 2) {
+                html += `<button class="${i===historyPage?'active':''}" onclick="historyPage=${i}; renderHistory()">${i}</button>`;
+            } else if (Math.abs(i - historyPage) === 3) {
+                html += '<button disabled>...</button>';
+            }
+        }
+        html += `<button ${historyPage===totalPages?'disabled':''} onclick="historyPage < ${totalPages} && (historyPage++, renderHistory())">Next</button>`;
+        pag.innerHTML = html;
+    }
+}
+
+function resetHistoryView() {
+    historyPage = 1;
+    document.getElementById('historySearch').value = '';
+    document.getElementById('historyDateFilter').value = '';
+    renderHistory();
+}
+
+function printHistory() {
+    const searchTerm = document.getElementById('historySearch').value.toLowerCase().trim();
+    const dateFilter = document.getElementById('historyDateFilter').value;
+
+    const filtered = allHistory.filter(h => {
+        const nameMatch = (h.uniform_name || '').toLowerCase().includes(searchTerm);
+        let dateMatch = true;
+        if (dateFilter) {
+            const soldDate = new Date(h.sold_at).toISOString().split('T')[0];
+            dateMatch = soldDate === dateFilter;
+        }
+        return nameMatch && dateMatch;
+    });
+
+    let total = 0;
+    let tbody = '';
+    filtered.forEach(h => {
+        const amt = h.quantity_sold * h.price_at_sale;
+        total += amt;
+        tbody += `
+            <tr>
+                <td style="padding:10px; border:1px solid #ddd;">${new Date(h.sold_at).toLocaleDateString('en-PH')}</td>
+                <td style="padding:10px; border:1px solid #ddd;">${h.uniform_name} (${h.size || '—'})</td>
+                <td style="padding:10px; border:1px solid #ddd; text-align:center;">${h.quantity_sold}</td>
+                <td style="padding:10px; border:1px solid #ddd; text-align:right;">₱${Number(h.price_at_sale).toFixed(2)}</td>
+                <td style="padding:10px; border:1px solid #ddd; text-align:right;">₱${amt.toFixed(2)}</td>
+            </tr>
+        `;
+    });
+
+    document.getElementById('printBody').innerHTML = tbody || '<tr><td colspan="5" style="text-align:center;padding:20px;">No records</td></tr>';
+    document.getElementById('printGrandTotal').textContent = '₱' + total.toFixed(2);
+    document.getElementById('printDateRange').textContent = dateFilter
+        ? `Sales on ${new Date(dateFilter).toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' })}`
+        : 'All recorded sales';
+
+    const printWin = window.open('', '_blank');
+    printWin.document.write(`
+        <html>
+        <head><title>Uniform Sales History - La Trinidad Academy</title></head>
+        <body style="font-family:Arial,sans-serif; margin:40px; color:#333;">
+            ${document.getElementById('printContent').innerHTML}
+        </body>
+        </html>
+    `);
+    printWin.document.close();
+    setTimeout(() => printWin.print(), 600);
+}
+
+// ── Event Listeners ────────────────────────────────────────────────────
+document.querySelectorAll('#filterBar .filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#filterBar .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPage = 1;
+        renderUniforms();
+    });
+});
+
+document.getElementById('uniformSearch').addEventListener('input', () => {
+    currentPage = 1;
+    renderUniforms();
+});
+
+document.getElementById('sold_quantity')?.addEventListener('input', updateSoldTotal);
+
+document.getElementById('historySearch')?.addEventListener('input', () => { historyPage = 1; renderHistory(); });
+document.getElementById('historyDateFilter')?.addEventListener('change', () => { historyPage = 1; renderHistory(); });
+
+// ── INIT ───────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    renderUniforms();
+    console.log("Uniforms page fully loaded");
+});
+</script>
 </body>
 </html>
