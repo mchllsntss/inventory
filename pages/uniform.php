@@ -1,5 +1,5 @@
 <?php
-// uniforms.php - Uniforms Management (fixed edit query - removed updated_at)
+// uniforms.php - Uniforms Management (simple stock + return & damaged notes)
 require_once '../connection/dbconnection.php';
 $conn = $GLOBALS['conn'];
 $current_page = 'uniforms';
@@ -21,10 +21,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $message = '<div class="alert error">Not enough stock. Only ' . $get['quantity'] . ' available.</div>';
         } else {
             $price_at_sale = $get['price'];
-            mysqli_query($conn, "UPDATE uniform SET quantity = quantity - $qty_sold WHERE uniform_id = $id");
+            $note = date('Y-m-d h:i A') . ": Sold $qty_sold pcs";
+            $current = mysqli_fetch_assoc(mysqli_query($conn, "SELECT activity_log FROM uniform WHERE uniform_id = $id"));
+            $new_log = $current['activity_log'] ? $current['activity_log'] . "\n" . $note : $note;
+
+            mysqli_query($conn, "UPDATE uniform SET 
+                quantity = quantity - $qty_sold,
+                activity_log = '" . mysqli_real_escape_string($conn, $new_log) . "'
+                WHERE uniform_id = $id");
             mysqli_query($conn, "INSERT INTO uniform_sales_history (uniform_id, quantity_sold, price_at_sale) VALUES ($id, $qty_sold, $price_at_sale)");
             $message = '<div class="alert success"><i class="fas fa-check-circle"></i> Successfully sold ' . $qty_sold . ' uniform(s)!</div>';
         }
+    }
+}
+
+// Handle Return Action
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'return_uniform') {
+    $id = (int)$_POST['uniform_id'];
+    $qty_returned = (int)$_POST['quantity_returned'];
+    $notes = mysqli_real_escape_string($conn, trim($_POST['return_notes'] ?? ''));
+
+    if ($id > 0 && $qty_returned > 0) {
+        $note = date('Y-m-d h:i A') . ": Returned $qty_returned pcs" . ($notes ? " - $notes" : "");
+        $current = mysqli_fetch_assoc(mysqli_query($conn, "SELECT quantity, price, activity_log FROM uniform WHERE uniform_id = $id"));
+        $new_log = $current['activity_log'] ? $current['activity_log'] . "\n" . $note : $note;
+
+        // Idagdag ulit sa stock
+        mysqli_query($conn, "UPDATE uniform SET 
+            quantity = quantity + $qty_returned,
+            activity_log = '" . mysqli_real_escape_string($conn, $new_log) . "'
+            WHERE uniform_id = $id");
+
+        // Magdagdag ng NEGATIVE sales record para mabawas sa total sales
+        $price_at_sale = $current['price'];
+        mysqli_query($conn, "INSERT INTO uniform_sales_history 
+            (uniform_id, quantity_sold, price_at_sale, sold_at) 
+            VALUES ($id, -$qty_returned, $price_at_sale, NOW())");
+
+        $message = '<div class="alert success"><i class="fas fa-check-circle"></i> Return recorded! Stock and total sales adjusted.</div>';
+    } else {
+        $message = '<div class="alert error">Invalid input.</div>';
+    }
+}
+
+// Handle Damaged Action
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'damaged_uniform') {
+    $id = (int)$_POST['uniform_id'];
+    $qty_damaged = (int)$_POST['quantity_damaged'];
+    $reason = mysqli_real_escape_string($conn, trim($_POST['damaged_reason'] ?? ''));
+
+    if ($id > 0 && $qty_damaged > 0) {
+        $current = mysqli_fetch_assoc(mysqli_query($conn, "SELECT quantity, price, activity_log FROM uniform WHERE uniform_id = $id"));
+        if ($current['quantity'] < $qty_damaged) {
+            $message = '<div class="alert error">Not enough stock to mark as damaged.</div>';
+        } else {
+            $note = date('Y-m-d h:i A') . ": Damaged $qty_damaged pcs" . ($reason ? " - $reason" : "");
+            $new_log = $current['activity_log'] ? $current['activity_log'] . "\n" . $note : $note;
+
+            // Bawasan ang stock
+            mysqli_query($conn, "UPDATE uniform SET 
+                quantity = quantity - $qty_damaged,
+                activity_log = '" . mysqli_real_escape_string($conn, $new_log) . "'
+                WHERE uniform_id = $id");
+
+            // Magdagdag ng NEGATIVE sales record para mabawas sa total sales
+            $price_at_sale = $current['price'];
+            mysqli_query($conn, "INSERT INTO uniform_sales_history 
+                (uniform_id, quantity_sold, price_at_sale, sold_at) 
+                VALUES ($id, -$qty_damaged, $price_at_sale, NOW())");
+
+            $message = '<div class="alert success"><i class="fas fa-check-circle"></i> Damaged recorded. Stock and total sales adjusted.</div>';
+        }
+    } else {
+        $message = '<div class="alert error">Invalid input.</div>';
     }
 }
 
@@ -134,157 +203,587 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.4/css/all.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --green: #2e7d5e;
-            --green-dark: #1a4d2e;
-            --red: #d32f2f;
-            --red-dark: #b71c1c;
-            --light: #e8f5e9;
-            --bg: #f0f7f2;
-            --blue: #0288d1;
-            --blue-dark: #0277bd;
-            --orange: #f57c00;
-            --orange-dark: #ef6c00;
+       :root {
+        --green: #2e7d5e;
+        --green-dark: #1a4d2e;
+        --red: #d32f2f;
+        --red-dark: #b71c1c;
+        --light: #e8f5e9;
+        --bg: #f0f7f2;
+        --blue: #0288d1;
+        --blue-dark: #0277bd;
+        --orange: #f57c00;
+        --orange-dark: #ef6c00;
+    }
+
+    body {
+        background: var(--bg);
+        font-family: 'Inter', sans-serif;
+        color: #1e3c2c;
+        margin: 0;
+    }
+
+    .main-content {
+        padding: 24px 32px;
+    }
+
+    .dashboard {
+        max-width: 1440px;
+        margin: 0 auto;
+    }
+
+    /* ────────────────────────────────────────
+    Header & Buttons
+    ───────────────────────────────────────── */
+
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    h1 {
+        font-family: 'Outfit', sans-serif;
+        color: #1a4d2e;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 0;
+    }
+
+    .header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .btn-pill {
+        background: var(--green);
+        color: white;
+        border: none;
+        border-radius: 999px;
+        padding: 10px 20px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .btn-pill:hover {
+        background: var(--green-dark);
+    }
+
+    .btn-outline {
+        background: transparent;
+        color: var(--green);
+        border: 2px solid var(--green);
+    }
+
+    .btn-outline:hover {
+        background: var(--green);
+        color: white;
+    }
+
+    /* ────────────────────────────────────────
+    Search & Filter
+    ───────────────────────────────────────── */
+
+    .top-controls {
+        display: flex;
+        align-items: center;
+        gap: 40px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+
+    .search-container {
+        flex: 1;
+        min-width: 260px;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid #d4e8da;
+        border-radius: 999px;
+        font-size: 16px;
+        box-sizing: border-box;
+    }
+
+    .search-input:focus {
+        outline: none;
+        border-color: var(--green);
+        box-shadow: 0 0 0 3px rgba(46, 125, 94, 0.15);
+    }
+
+    .filter-bar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        max-width: 100%;
+    }
+
+    .filter-btn {
+        padding: 9px 16px;
+        border-radius: 999px;
+        background: white;
+        border: 1px solid #d4e8da;
+        cursor: pointer;
+        font-weight: 500;
+        color: #1a4d2e;
+        white-space: nowrap;
+    }
+
+    .filter-btn.active {
+        background: var(--green);
+        color: white;
+        border-color: var(--green-dark);
+    }
+
+    /* ────────────────────────────────────────
+    Table
+    ───────────────────────────────────────── */
+
+    .table-container {
+        background: white;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid #d4e8da;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    th,
+    td {
+        padding: 14px 10px;
+        text-align: left;
+        vertical-align: middle;
+        font-size: 14px;
+        box-sizing: border-box;
+    }
+
+    th {
+        background: var(--light);
+        font-weight: 600;
+        color: #1a4d2e;
+        white-space: nowrap;
+    }
+
+    tr:hover {
+        background: #f8fdfa;
+    }
+
+    /* Column widths */
+    th:nth-child(1), td:nth-child(1) { width: 19%; }
+    th:nth-child(2), td:nth-child(2) { width: 8%; }
+    th:nth-child(3), td:nth-child(3) { width: 11%; }
+    th:nth-child(4), td:nth-child(4) { width: 10%; }
+    th:nth-child(5), td:nth-child(5) { width: 8%; }
+    th:nth-child(6), td:nth-child(6) { width: 9%; text-align: right; }
+    th:nth-child(7), td:nth-child(7) { width: 9%; text-align: right; }
+    th:nth-child(8), td:nth-child(8) { width: 8%; }
+    th:nth-child(9), td:nth-child(9) { width: 18%; min-width: 190px; }
+
+    td {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    td:nth-child(1) {
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    /* ────────────────────────────────────────
+    Action Buttons
+    ───────────────────────────────────────── */
+
+    .action-btn {
+        padding: 8px 10px;
+        font-size: 13px;
+        border: none;
+        border-radius: 999px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        transition: all 0.2s ease;
+        background: #f0f0f0;
+        color: #333;
+    }
+
+    .action-btn i {
+        font-size: 1.1em;
+    }
+
+    .action-btn.view {
+        background: var(--orange);
+        color: white;
+    }
+    .action-btn.view:hover {
+        background: var(--orange-dark);
+        transform: scale(1.08);
+        box-shadow: 0 4px 12px rgba(245, 124, 0, 0.4);
+    }
+
+    .action-btn.edit {
+        background: var(--blue);
+        color: white;
+    }
+    .action-btn.edit:hover {
+        background: var(--blue-dark);
+        transform: scale(1.08);
+        box-shadow: 0 4px 12px rgba(2, 136, 209, 0.4);
+    }
+
+    .action-btn.sold {
+        background: var(--red);
+        color: white;
+    }
+    .action-btn.sold:hover {
+        background: var(--red-dark);
+        transform: scale(1.08);
+        box-shadow: 0 4px 12px rgba(211, 47, 47, 0.4);
+    }
+
+    .action-btn.return {
+        background: #4caf50;
+        color: white;
+    }
+    .action-btn.return:hover {
+        background: #388e3c;
+        transform: scale(1.08);
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+    }
+
+    .action-btn.damaged {
+        background: #e91e63;
+        color: white;
+    }
+    .action-btn.damaged:hover {
+        background: #c2185b;
+        transform: scale(1.08);
+        box-shadow: 0 4px 12px rgba(233, 30, 99, 0.4);
+    }
+
+    /* ────────────────────────────────────────
+    Badges, Modals, Forms, etc.
+    ───────────────────────────────────────── */
+
+    .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .badge.male { background: #bbdefb; color: #0d47a1; }
+    .badge.female { background: #f8bbd0; color: #880e4f; }
+    .badge.low-stock { background: #ffcdd2; color: #b71c1c; }
+
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999 !important;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+    }
+
+    .modal-container {
+        background: white;
+        border-radius: 16px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 85vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .modal-header {
+        padding: 16px 24px;
+        border-bottom: 1px solid #e0e0e0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 10;
+    }
+
+    .modal-body {
+        padding: 24px;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .form-grid .full-width {
+        grid-column: 1/-1;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+    }
+
+    .form-control,
+    textarea.form-control {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 24px;
+        grid-column: 1/-1;
+    }
+
+    .save-btn,
+    .confirm-btn {
+        background: var(--green);
+        color: white;
+        border: none;
+        border-radius: 50px;
+        padding: 10px 30px;
+        font-size: 1.125rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: box-shadow 0.25s ease, transform 0.15s ease;
+    }
+
+    .save-btn:hover,
+    .confirm-btn:hover {
+        box-shadow: 2px 2px 8px rgba(0, 100, 0, 0.5),
+                    -2px -2px 8px rgba(120, 255, 120, 0.45);
+        transform: translateY(-1px);
+    }
+
+    .save-btn:active,
+    .confirm-btn:active {
+        transform: translateY(1px);
+        box-shadow: 1px 1px 6px rgba(0, 100, 0, 0.55),
+                    -1px -1px 6px rgba(100, 255, 100, 0.4);
+    }
+
+    .btn-cancel {
+        background: var(--red);
+        color: white;
+        border: none;
+        border-radius: 50px;
+        padding: 10px 30px;
+        font-size: 1.125rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        letter-spacing: 0.3px;
+    }
+
+    .btn-cancel:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 30px rgba(255, 0, 0, 0.28),
+                    inset 0 2px 6px rgba(255, 255, 255, 0.35);
+        background: linear-gradient(to bottom, var(--red), #e60000);
+    }
+
+    .btn-cancel:active {
+        transform: translateY(1px);
+        box-shadow: 0 3px 10px rgba(255, 0, 0, 0.22),
+                    inset 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Pagination, Alerts, History, Print */
+
+    /* Pagination container - importante 'to para ma-center */
+    .client-pagination {
+        display: flex;
+        justify-content: center;       /* ← nakasentro horizontally */
+        align-items: center;           /* patayo na align */
+        gap: 8px;                      /* mas magandang spacing sa pagitan ng buttons */
+        margin: 32px 0 48px 0;         /* breathing room sa taas at baba */
+        flex-wrap: wrap;               /* kung maraming page, bababa sa susunod na linya */
+    }
+
+    /* Individual buttons */
+    .client-pagination button {
+        margin: 0;                     /* tanggalin na yung dating margin: 0 5px; */
+        min-width: 40px;               /* pantay-pantay ang lapad */
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #e8f5e9;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        color: #1a4d2e;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+    /* Hover effect */
+    .client-pagination button:hover:not(:disabled) {
+        background: var(--green);
+        color: white;
+        transform: scale(1.05);
+    }
+
+    /* Active/Current page */
+    .client-pagination button.active {
+        background: var(--green);
+        color: white;
+        box-shadow: 0 2px 8px rgba(46, 125, 94, 0.3);
+    }
+
+    /* Disabled buttons (Previous/Next kapag wala na) */
+    .client-pagination button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+    .total-amount {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1a4d2e;
+        text-align: center;
+        margin: 32px 0;
+    }
+
+    .alert {
+        padding: 14px 20px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .alert.success {
+        background: #e2f0e6;
+        color: #1a4d2e;
+    }
+
+    .alert.error {
+        background: #ffebee;
+        color: #c62828;
+    }
+
+    .history-controls {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+
+    .history-controls .search-input {
+        flex: 1;
+        min-width: 220px;
+    }
+
+    .history-controls input[type="date"] {
+        padding: 10px 14px;
+        border: 1px solid var(--green-dark);
+        border-radius: 999px;
+        background: var(--green);
+        color: white;
+        font-size: 15px;
+        min-width: 170px;
+        cursor: pointer;
+    }
+
+    .history-controls input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(1);
+    }
+
+    .print-btn {
+        background: #444;
+        color: white;
+        border: none;
+        padding: 9px 18px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .print-btn:hover {
+        background: #222;
+    }
+
+    .history-item {
+        padding: 16px;
+        background: #f8fdfa;
+        border-radius: 12px;
+        margin-bottom: 12px;
+        border-left: 4px solid var(--green);
+    }
+
+    .history-item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+
+    .history-date {
+        color: #555;
+        font-size: 13px;
+    }
+
+    .print-area {
+        display: none;
+    }
+
+    @media print {
+        body * {
+            visibility: hidden;
         }
-        body { background: var(--bg); font-family: 'Inter', sans-serif; color: #1e3c2c; margin: 0; }
-        .main-content { padding: 24px 32px; }
-        .dashboard { max-width: 1440px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
-        h1 { font-family: 'Outfit', sans-serif; color: #1a4d2e; display: flex; align-items: center; gap: 12px; margin: 0; }
-        .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .btn-pill { background: var(--green); color: white; border: none; border-radius: 999px; padding: 10px 20px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; }
-        .btn-pill:hover { background: var(--green-dark); }
-        .btn-outline { background: transparent; color: var(--green); border: 2px solid var(--green); }
-        .btn-outline:hover { background: var(--green); color: white; }
-        .top-controls { display: flex; align-items: center; gap: 40px; margin-bottom: 24px; flex-wrap: wrap; }
-        .search-container { flex: 1; min-width: 260px; }
-        .search-input { width: 100%; padding: 12px 16px; border: 1px solid #d4e8da; border-radius: 999px; font-size: 16px; box-sizing: border-box; }
-        .search-input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(46,125,94,0.15); }
-        .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; max-width: 100%; }
-        .filter-btn { padding: 9px 16px; border-radius: 999px; background: white; border: 1px solid #d4e8da; cursor: pointer; font-weight: 500; color: #1a4d2e; white-space: nowrap; }
-        .filter-btn.active { background: var(--green); color: white; border-color: var(--green-dark); }
-        .table-container { background: white; border-radius: 16px; overflow: hidden; border: 1px solid #d4e8da; box-shadow: 0 6px 16px rgba(0,0,0,0.05); }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        th, td { padding: 14px 10px; text-align: left; vertical-align: middle; font-size: 14px; box-sizing: border-box; }
-        th { background: var(--light); font-weight: 600; color: #1a4d2e; white-space: nowrap; }
-        tr:hover { background: #f8fdfa; }
-        th:nth-child(1), td:nth-child(1) { width: 19%; }
-        th:nth-child(2), td:nth-child(2) { width: 8%; }
-        th:nth-child(3), td:nth-child(3) { width: 11%; }
-        th:nth-child(4), td:nth-child(4) { width: 10%; }
-        th:nth-child(5), td:nth-child(5) { width: 8%; }
-        th:nth-child(6), td:nth-child(6) { width: 9%; text-align: right; }
-        th:nth-child(7), td:nth-child(7) { width: 9%; text-align: right; }
-        th:nth-child(8), td:nth-child(8) { width: 8%; }
-        th:nth-child(9), td:nth-child(9) { width: 18%; min-width: 190px; }
-        td { overflow: hidden; text-overflow: ellipsis; }
-        td:nth-child(1) { white-space: normal; word-break: break-word; }
-        .action-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
-        .action-btn {
-            padding: 8px 12px;
-            font-size: 13px;
-            border: none;
-            border-radius: 999px;
-            cursor: pointer !important;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.15s;
-            pointer-events: auto !important;
-            z-index: 10;
+        .print-area,
+        .print-area * {
+            visibility: visible;
         }
-        .action-btn i { font-size: 1.15em; }
-        .action-btn.view  { background: var(--orange); color: white; }
-        .action-btn.edit  { background: var(--blue);   color: white; }
-        .action-btn.sold  { background: var(--red);    color: white; }
-        .action-btn:hover.view { background: var(--orange-dark); }
-        .action-btn:hover.edit { background: var(--blue-dark); }
-        .action-btn:hover.sold { background: var(--red-dark); }
-        .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; }
-        .badge.male { background: #bbdefb; color: #0d47a1; }
-        .badge.female { background: #f8bbd0; color: #880e4f; }
-        .badge.low-stock { background: #ffcdd2; color: #b71c1c; }
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 9999 !important;
-            justify-content: center;
-            align-items: center;
-            pointer-events: auto !important;
-        }
-        .modal-overlay.active { display: flex; }
-        .modal-container {
-            background: white;
-            border-radius: 24px;
-            width: 90%;
-            max-width: 820px;
-            max-height: 88vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.25);
-        }
-        .modal-header {
-            padding: 20px 28px;
-            border-bottom: 1px solid #e2f0e6;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
+        .print-area {
+            position: absolute;
+            left: 0;
             top: 0;
-            background: white;
-            z-index: 10;
+            width: 100%;
         }
-        .modal-body { padding: 24px 28px; }
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .form-grid .full-width { grid-column: 1/-1; }
-        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; color: #1a4d2e; }
-        .form-control { width: 100%; padding: 10px 14px; border: 1px solid #d4e8da; border-radius: 12px; font-size: 15px; box-sizing: border-box; }
-        .form-control:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(46,125,94,0.1); }
-        .form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 28px; grid-column: 1/-1; }
-        .form-actions button { padding: 12px 28px; font-size: 16px; font-weight: 600; border: none; cursor: pointer; border-radius: 999px; min-width: 140px; }
-        .save-btn, .confirm-btn { background: var(--green); color: white; }
-        .save-btn:hover, .confirm-btn:hover { background: var(--green-dark); }
-        .btn-cancel { background: var(--red); color: white; }
-        .client-pagination { margin-top: 20px; text-align: center; }
-        .client-pagination button { margin: 0 5px; padding: 8px 14px; border-radius: 999px; background: #e8f5e9; border: none; cursor: pointer; font-size: 14px; color: #1a4d2e; }
-        .client-pagination button.active { background: var(--green); color: white; }
-        .client-pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .total-amount { font-size: 20px; font-weight: 600; color: #1a4d2e; text-align: center; margin: 32px 0; }
-        .alert { padding: 14px 20px; border-radius: 12px; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
-        .alert.success { background: #e2f0e6; color: #1a4d2e; }
-        .alert.error { background: #ffebee; color: #c62828; }
-        .history-controls { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
-        .history-controls .search-input { flex: 1; min-width: 220px; }
-        .history-controls input[type="date"] { padding: 10px 14px; border: 1px solid var(--green-dark); border-radius: 999px; background: var(--green); color: white; font-size: 15px; min-width: 170px; cursor: pointer; }
-        .history-controls input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
-        .print-btn { background: #444; color: white; border: none; padding: 9px 18px; border-radius: 999px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px; }
-        .print-btn:hover { background: #222; }
-        .history-item {
-            padding: 16px;
-            background: #f8fdfa;
-            border-radius: 12px;
-            margin-bottom: 12px;
-            border-left: 4px solid var(--green);
+        .no-print {
+            display: none !important;
         }
-        .history-item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-        .history-date { color: #555; font-size: 13px; }
-        .print-area { display: none; }
-        @media print {
-            body * { visibility: hidden; }
-            .print-area, .print-area * { visibility: visible; }
-            .print-area { position: absolute; left: 0; top: 0; width: 100%; }
-            .no-print { display: none !important; }
-        }
+    }
     </style>
 </head>
 <body>
+
 <?php include '../components/sidebar.php'; ?>
 
 <div class="main-content">
@@ -576,11 +1075,71 @@ $total_amount = mysqli_fetch_assoc(mysqli_query($conn, "
     </div>
 </div>
 
+<!-- Return Modal -->
+<div class="modal-overlay" id="returnModal">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-undo"></i> Record Return</h2>
+            <button onclick="document.getElementById('returnModal').classList.remove('active')">×</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="return_uniform">
+                <input type="hidden" name="uniform_id" id="return_uniform_id">
+                <div><strong>Item:</strong> <span id="return_item_name"></span></div>
+                <div><strong>Current stock:</strong> <span id="return_current_stock"></span></div>
+                <div class="form-group">
+                    <label>Quantity to return</label>
+                    <input type="number" name="quantity_returned" min="1" value="1" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Notes (optional)</label>
+                    <textarea name="return_notes" rows="2" class="form-control"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('returnModal').classList.remove('active')">Cancel</button>
+                    <button type="submit" class="save-btn">Confirm Return</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Damaged Modal -->
+<div class="modal-overlay" id="damagedModal">
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2><i class="fas fa-times-circle"></i> Mark as Damaged</h2>
+            <button onclick="document.getElementById('damagedModal').classList.remove('active')">×</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST">
+                <input type="hidden" name="action" value="damaged_uniform">
+                <input type="hidden" name="uniform_id" id="damaged_uniform_id">
+                <div><strong>Item:</strong> <span id="damaged_item_name"></span></div>
+                <div><strong>Current stock:</strong> <span id="damaged_current_stock"></span></div>
+                <div class="form-group">
+                    <label>Quantity damaged</label>
+                    <input type="number" name="quantity_damaged" min="1" value="1" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Reason / Notes (optional)</label>
+                    <textarea name="damaged_reason" rows="2" class="form-control"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="document.getElementById('damagedModal').classList.remove('active')">Cancel</button>
+                    <button type="submit" class="confirm-btn">Confirm Damaged</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- View Modal -->
 <div class="modal-overlay" id="viewModal">
     <div class="modal-container">
         <div class="modal-header">
-            <h2><i class="fas fa-eye"></i> Uniform Details</h2>
+            <h2><i class="fas fa-eye"></i> ACTIVITY LOGS</h2>
             <button onclick="document.getElementById('viewModal').classList.remove('active')">×</button>
         </div>
         <div class="modal-body">
@@ -646,18 +1205,16 @@ const allHistory  = <?= json_encode($history) ?>;
 function openViewModal(id) {
     const u = allUniforms.find(x => Number(x.uniform_id) === Number(id));
     if (!u) return;
+
     document.getElementById('view_details').innerHTML = `
-        <div><span>ID:</span><span>#${u.uniform_id}</span></div>
-        <div><span>Name:</span><span>${u.uniform_name}</span></div>
-        <div><span>Gender:</span><span>${u.gender || u.category || '—'}</span></div>
-        <div><span>Level:</span><span>${u.school_level || '—'}</span></div>
-        <div><span>Type:</span><span>${u.item_type || '—'}</span></div>
-        <div><span>Size:</span><span>${u.size || '—'}</span></div>
-        <div><span>Color:</span><span>${u.color || 'Default'}</span></div>
-        <div><span>Price:</span><span>₱${Number(u.price).toFixed(2)}</span></div>
-        <div><span>Stock:</span><span>${u.quantity} pcs</span></div>
-        <div><span>Supplier:</span><span>${u.supplier_name || '—'}</span></div>
+        <div style="margin-top:16px;">
+            <h3 style="margin-bottom:12px; color:#1a4d2e;">Monitoring returnes and damages</h3>
+            <pre style="background:#f8f9fa; padding:16px; border-radius:8px; white-space:pre-wrap; font-size:14px; max-height:350px; overflow-y:auto; line-height:1.5;">
+${u.activity_log || 'No Activities.'}
+            </pre>
+        </div>
     `;
+
     document.getElementById('viewModal').classList.add('active');
 }
 
@@ -691,6 +1248,24 @@ function openSoldModal(id) {
     document.getElementById('stock_info').textContent = `Available stock: ${u.quantity} pcs`;
     updateSoldTotal();
     document.getElementById('soldModal').classList.add('active');
+}
+
+function openReturnModal(id) {
+    const u = allUniforms.find(x => Number(x.uniform_id) === Number(id));
+    if (!u) return;
+    document.getElementById('return_uniform_id').value = id;
+    document.getElementById('return_item_name').textContent = u.uniform_name + ' (' + (u.size || '—') + ')';
+    document.getElementById('return_current_stock').textContent = u.quantity + ' pcs';
+    document.getElementById('returnModal').classList.add('active');
+}
+
+function openDamagedModal(id) {
+    const u = allUniforms.find(x => Number(x.uniform_id) === Number(id));
+    if (!u) return;
+    document.getElementById('damaged_uniform_id').value = id;
+    document.getElementById('damaged_item_name').textContent = u.uniform_name + ' (' + (u.size || '—') + ')';
+    document.getElementById('damaged_current_stock').textContent = u.quantity + ' pcs';
+    document.getElementById('damagedModal').classList.add('active');
 }
 
 function updateSoldTotal() {
@@ -737,7 +1312,7 @@ function renderUniforms() {
 
     pageItems.forEach(u => {
         const tr = document.createElement('tr');
-        const lowStock = u.quantity <= u.low_stock_limit ? 'badge low-stock' : '';
+        const lowStock = Number(u.quantity) <= Number(u.low_stock_limit) ? 'badge low-stock' : '';
         tr.innerHTML = `
             <td title="${u.uniform_name}">${u.uniform_name}</td>
             <td><span class="badge ${(u.gender||u.category||'').toLowerCase()}">${u.gender||u.category||'—'}</span></td>
@@ -748,9 +1323,11 @@ function renderUniforms() {
             <td><span class="${lowStock}">${Number(u.quantity).toLocaleString()} pcs</span></td>
             <td>${u.color || 'Default'}</td>
             <td class="action-buttons">
-                <button type="button" class="action-btn view"  onclick="openViewModal(${u.uniform_id})"><i class="fas fa-eye"></i></button>
-                <button type="button" class="action-btn edit"  onclick="openEditModal(${u.uniform_id})"><i class="fas fa-edit"></i></button>
-                <button type="button" class="action-btn sold"  onclick="openSoldModal(${u.uniform_id})"><i class="fas fa-shopping-cart"></i></button>
+                <button type="button" class="action-btn view"    onclick="openViewModal(${u.uniform_id})"    title="View"><i class="fas fa-eye"></i></button>
+                <button type="button" class="action-btn edit"    onclick="openEditModal(${u.uniform_id})"    title="Edit"><i class="fas fa-edit"></i></button>
+                <button type="button" class="action-btn return"  onclick="openReturnModal(${u.uniform_id})"  title="Return"><i class="fas fa-undo"></i></button>
+                <button type="button" class="action-btn damaged" onclick="openDamagedModal(${u.uniform_id})" title="Damaged"><i class="fas fa-times-circle"></i></button>
+                <button type="button" class="action-btn sold"    onclick="openSoldModal(${u.uniform_id})"    title="Sell"><i class="fas fa-shopping-cart"></i></button>
             </td>
         `;
         tbody.appendChild(tr);

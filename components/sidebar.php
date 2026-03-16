@@ -1,3 +1,34 @@
+<?php
+// sidebar.php
+
+// Koneksyon sa database (kailangan para makuha ang low stock count)
+require_once '../connection/dbconnection.php';
+$conn = $GLOBALS['conn'] ?? null;
+
+$low_books_count    = 0;
+$low_uniforms_count = 0;
+
+if ($conn) {
+    // Low stock books
+    $low_books_result = mysqli_query($conn, "
+        SELECT COUNT(*) as cnt 
+        FROM books 
+        WHERE quantity <= low_stock_limit 
+          AND quantity > 0
+    ");
+    $low_books_count = $low_books_result ? (int) mysqli_fetch_assoc($low_books_result)['cnt'] : 0;
+
+    // Low stock uniforms
+    $low_uniforms_result = mysqli_query($conn, "
+        SELECT COUNT(*) as cnt 
+        FROM uniform 
+        WHERE quantity <= low_stock_limit 
+          AND quantity > 0
+    ");
+    $low_uniforms_count = $low_uniforms_result ? (int) mysqli_fetch_assoc($low_uniforms_result)['cnt'] : 0;
+}
+?>
+
 <style>
     /* Remove all sidebar collapse related styles */
     .main-content-expanded {
@@ -99,6 +130,7 @@
         font-weight: 500;
         font-size: 0.95rem;
         border: none;
+        position: relative;
     }
     
     #sidebar .nav-item:hover {
@@ -129,6 +161,20 @@
     
     #sidebar .nav-item.active .nav-icon {
         color: #1a4d2e;
+    }
+    
+    /* Badge styling para sa low stock */
+    .sidebar-badge {
+        background: #ef4444;
+        color: white;
+        font-size: 11px;
+        font-weight: bold;
+        padding: 2px 7px;
+        border-radius: 999px;
+        margin-left: auto;
+        min-width: 18px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     }
     
     /* Open sidebar button - minimal */
@@ -290,10 +336,16 @@
         <a href="../pages/books.php" class="nav-item" data-page="books">
             <i class="fas fa-book nav-icon"></i>
             <span class="nav-text">Books</span>
+            <?php if ($low_books_count > 0): ?>
+                <span class="sidebar-badge"><?= min(99, $low_books_count) ?></span>
+            <?php endif; ?>
         </a>
         <a href="../pages/uniform.php" class="nav-item" data-page="uniform">
             <i class="fas fa-tshirt nav-icon"></i>
             <span class="nav-text">Uniform</span>
+            <?php if ($low_uniforms_count > 0): ?>
+                <span class="sidebar-badge"><?= min(99, $low_uniforms_count) ?></span>
+            <?php endif; ?>
         </a>
         <a href="../pages/supplier.php" class="nav-item" data-page="supplier">
             <i class="fas fa-truck nav-icon"></i>
